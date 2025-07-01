@@ -1,4 +1,4 @@
-![Badge Alt Text](https://img.shields.io/badge/subject-status-color.svg)
+![Versatility](https://img.shields.io/badge/Capability-Versatile-indigo?style=for-the-badge&logo=python&logoColor=white) ![Professional Quality](https://img.shields.io/badge/Quality-Professional-purple?style=for-the-badge&logo=github&logoColor=white)
 
 # **DevOps Swiss Army Knife 🛠️**
 
