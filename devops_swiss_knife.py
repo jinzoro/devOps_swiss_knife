@@ -33,7 +33,7 @@ except ImportError:
 
 # --- Configuration & Constants ---
 APP_NAME = "DevOps Swiss Army Knife 🛠️"
-VERSION = "1.4.0" # Updated version for new categories
+VERSION = "1.5.0" # Updated version for new categories and features
 
 # Emojis for better visual organization
 EMOJI = {
@@ -54,6 +54,8 @@ EMOJI = {
     "automation": "🤖", # New emoji for Automation & Scheduling
     "dev": "🧑‍💻", # New emoji for Development Utilities
     "windows": "🪟", # New emoji for Windows Specific Tools
+    "kubernetes": "☸️", # New emoji for Kubernetes
+    "web": "🕸️", # New emoji for Web Server Utilities
     "exit": "👋",
     "menu": "📖",
     "success": "✅",
@@ -239,6 +241,8 @@ def network_utilities():
         print(f"{COLOR['menu_option']}4. DNS Lookup (nslookup){COLOR['reset']}")
         print(f"{COLOR['menu_option']}5. View Network Connections (netstat){COLOR['reset']}")
         print(f"{COLOR['menu_option']}6. Make a Basic HTTP GET Request (curl){COLOR['reset']}")
+        print(f"{COLOR['menu_option']}7. Whois Lookup{COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}8. Dig/Host DNS Query{COLOR['reset']}") # New
         print(f"{COLOR['menu_option']}b. Back to Main Menu{COLOR['reset']}")
 
         choice = input(f"{COLOR['prompt']}{EMOJI['input']} Enter your choice: {COLOR['reset']}").strip().lower()
@@ -320,6 +324,29 @@ def network_utilities():
                     print_message(f"{EMOJI['error']} Failed to make HTTP GET request. Is curl installed?", "error")
             else:
                 print_message(f"{EMOJI['warning']} URL cannot be empty.", "warning")
+        elif choice == '7': # New Whois
+            domain = input(f"{COLOR['prompt']}{EMOJI['input']} Enter domain for Whois lookup (e.g., google.com): {COLOR['reset']}").strip()
+            if domain:
+                whois_output = run_command(f"whois {domain}")
+                print(COLOR['output'] + (whois_output if whois_output else "Whois lookup failed. Is 'whois' installed?") + COLOR['reset'])
+                print_message(f"{EMOJI['success']} Whois lookup completed.", "success")
+            else:
+                print_message(f"{EMOJI['warning']} Domain cannot be empty.", "warning")
+        elif choice == '8': # New Dig/Host
+            hostname = input(f"{COLOR['prompt']}{EMOJI['input']} Enter hostname for DNS query (e.g., example.com A): {COLOR['reset']}").strip()
+            if hostname:
+                if platform.system() in ["Linux", "Darwin"]:
+                    dig_cmd = f"dig {hostname}"
+                elif platform.system() == "Windows":
+                    dig_cmd = f"host {hostname}" # 'host' is often available on Windows via Git Bash or similar
+                else:
+                    print_message("Dig/Host not supported on this OS.", "error")
+                    continue
+                dig_output = run_command(dig_cmd)
+                print(COLOR['output'] + (dig_output if dig_output else "DNS query failed. Is 'dig' or 'host' installed?") + COLOR['reset'])
+                print_message(f"{EMOJI['success']} DNS query completed.", "success")
+            else:
+                print_message(f"{EMOJI['warning']} Hostname cannot be empty.", "warning")
         elif choice == 'b':
             break
         else:
@@ -1195,6 +1222,95 @@ def development_utilities():
         else:
             print_message(f"{EMOJI['warning']} Invalid choice. Please try again.", "warning")
 
+def kubernetes_utilities():
+    """Provides basic Kubernetes utilities."""
+    print_header(f"{EMOJI['kubernetes']} Kubernetes Utilities")
+    print_message(f"{EMOJI['info']} This section requires 'kubectl' to be installed and configured to connect to a cluster.", "info")
+
+    # Check if kubectl is present
+    kubectl_path = run_command("which kubectl" if platform.system() != "Windows" else "where kubectl", check=False)
+    if not kubectl_path:
+        print_message(f"{EMOJI['error']} kubectl not found. Please install it and ensure it's in your PATH.", "error")
+        return
+
+    while True:
+        print(f"\n{COLOR['menu_option']}1. List Pods{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}2. List Deployments{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}3. Get Pod Details by Name{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}b. Back to Main Menu{COLOR['reset']}")
+
+        choice = input(f"{COLOR['prompt']}{EMOJI['input']} Enter your choice: {COLOR['reset']}").strip().lower()
+
+        if choice == '1':
+            print_message(f"\n{EMOJI['info']} Listing Pods...", "info")
+            pods = run_command("kubectl get pods")
+            print(COLOR['output'] + (pods if pods else "No pods found or kubectl command failed.") + COLOR['reset'])
+            print_message(f"{EMOJI['success']} Pods listed.", "success")
+        elif choice == '2':
+            print_message(f"\n{EMOJI['info']} Listing Deployments...", "info")
+            deployments = run_command("kubectl get deployments")
+            print(COLOR['output'] + (deployments if deployments else "No deployments found or kubectl command failed.") + COLOR['reset'])
+            print_message(f"{EMOJI['success']} Deployments listed.", "success")
+        elif choice == '3':
+            pod_name = input(f"{COLOR['prompt']}{EMOJI['input']} Enter Pod name to describe: {COLOR['reset']}").strip()
+            if pod_name:
+                print_message(f"\n{EMOJI['info']} Describing Pod '{pod_name}'...", "info")
+                pod_details = run_command(f"kubectl describe pod {pod_name}")
+                print(COLOR['output'] + (pod_details if pod_details else f"Pod '{pod_name}' not found or command failed.") + COLOR['reset'])
+                print_message(f"{EMOJI['success']} Pod details displayed.", "success")
+            else:
+                print_message(f"{EMOJI['warning']} Pod name cannot be empty.", "warning")
+        elif choice == 'b':
+            break
+        else:
+            print_message(f"{EMOJI['warning']} Invalid choice. Please try again.", "warning")
+
+def web_server_utilities():
+    """Provides basic web server utilities."""
+    print_header(f"{EMOJI['web']} Web Server Utilities")
+    print_message(f"{EMOJI['info']} This section includes checks for common web servers (Nginx/Apache) on Linux/macOS and general HTTP checks.", "info")
+
+    while True:
+        print(f"\n{COLOR['menu_option']}1. Check Nginx/Apache Status (Linux/macOS){COLOR['reset']}")
+        print(f"{COLOR['menu_option']}2. Get HTTP Response Headers (curl -I){COLOR['reset']}")
+        print(f"{COLOR['menu_option']}b. Back to Main Menu{COLOR['reset']}")
+
+        choice = input(f"{COLOR['prompt']}{EMOJI['input']} Enter your choice: {COLOR['reset']}").strip().lower()
+
+        if choice == '1':
+            if platform.system() in ["Linux", "Darwin"]:
+                print_message(f"\n{EMOJI['info']} Checking Nginx/Apache status...", "info")
+                nginx_status = run_command("systemctl status nginx" if run_command("which nginx", check=False) else "service nginx status", check=False)
+                apache_status = run_command("systemctl status apache2" if run_command("which apache2", check=False) else "service apache2 status", check=False)
+
+                if nginx_status:
+                    print_message(f"\n{EMOJI['success']} Nginx Status:\n{COLOR['output']}{nginx_status}{COLOR['reset']}", "success")
+                else:
+                    print_message(f"{EMOJI['warning']} Nginx not found or not running.", "warning")
+                
+                if apache_status:
+                    print_message(f"\n{EMOJI['success']} Apache2 Status:\n{COLOR['output']}{apache_status}{COLOR['reset']}", "success")
+                else:
+                    print_message(f"{EMOJI['warning']} Apache2 not found or not running.", "warning")
+
+                if not nginx_status and not apache_status:
+                    print_message(f"{EMOJI['error']} Neither Nginx nor Apache2 found/running on this system.", "error")
+            else:
+                print_message(f"{EMOJI['warning']} This option is primarily for Linux/macOS systems.", "warning")
+            print_message(f"{EMOJI['success']} Web server status check completed.", "success")
+        elif choice == '2':
+            url = input(f"{COLOR['prompt']}{EMOJI['input']} Enter URL to get HTTP headers (e.g., https://google.com): {COLOR['reset']}").strip()
+            if url:
+                headers = run_command(f"curl -I {url}")
+                print(COLOR['output'] + (headers if headers else "Failed to get headers. Is 'curl' installed?") + COLOR['reset'])
+                print_message(f"{EMOJI['success']} HTTP header check completed.", "success")
+            else:
+                print_message(f"{EMOJI['warning']} URL cannot be empty.", "warning")
+        elif choice == 'b':
+            break
+        else:
+            print_message(f"{EMOJI['warning']} Invalid choice. Please try again.", "warning")
+
 def windows_specific_tools():
     """Provides Windows-specific system and administration utilities."""
     if platform.system() != "Windows":
@@ -1207,8 +1323,12 @@ def windows_specific_tools():
         print(f"\n{COLOR['menu_option']}1. List Windows Services{COLOR['reset']}")
         print(f"{COLOR['menu_option']}2. Start a Windows Service{COLOR['reset']}")
         print(f"{COLOR['menu_option']}3. Stop a Windows Service{COLOR['reset']}")
-        print(f"{COLOR['menu_option']}4. View Network Adapters (PowerShell){COLOR['reset']}")
-        print(f"{COLOR['menu_option']}5. List Local Users{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}4. Restart a Windows Service{COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}5. View Network Adapters (PowerShell){COLOR['reset']}")
+        print(f"{COLOR['menu_option']}6. List Local Users{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}7. Flush DNS Cache{COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}8. View Installed Programs (PowerShell){COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}9. View System Uptime{COLOR['reset']}") # New
         print(f"{COLOR['menu_option']}b. Back to Main Menu{COLOR['reset']}")
 
         choice = input(f"{COLOR['prompt']}{EMOJI['input']} Enter your choice: {COLOR['reset']}").strip().lower()
@@ -1240,16 +1360,56 @@ def windows_specific_tools():
                     print_message(f"{EMOJI['error']} Failed to stop service '{service_name}'. Check service name and permissions.", "error")
             else:
                 print_message(f"{EMOJI['warning']} Service name cannot be empty.", "warning")
-        elif choice == '4':
+        elif choice == '4': # New Restart Service
+            service_name = input(f"{COLOR['prompt']}{EMOJI['input']} Enter service name to RESTART: {COLOR['reset']}").strip()
+            if service_name:
+                restart_result = run_command(f"powershell -command \"Restart-Service -Name '{service_name}' -PassThru\"")
+                if restart_result is not None:
+                    print_message(f"{EMOJI['success']} Service '{service_name}' restarted successfully.", "success")
+                    print(COLOR['output'] + restart_result + COLOR['reset'])
+                else:
+                    print_message(f"{EMOJI['error']} Failed to restart service '{service_name}'. Check service name and permissions.", "error")
+            else:
+                print_message(f"{EMOJI['warning']} Service name cannot be empty.", "warning")
+        elif choice == '5':
             print_message(f"\n{EMOJI['info']} Viewing Network Adapters (Get-NetAdapter):", "info")
             net_adapters = run_command("powershell -command \"Get-NetAdapter | Format-Table Name, Status, MacAddress, LinkSpeed -AutoSize\"")
             print(COLOR['output'] + (net_adapters if net_adapters else "Failed to retrieve network adapters.") + COLOR['reset'])
             print_message(f"{EMOJI['success']} Network adapters displayed.", "success")
-        elif choice == '5':
+        elif choice == '6':
             print_message(f"\n{EMOJI['info']} Listing Local Users (net user):", "info")
             local_users = run_command("net user")
             print(COLOR['output'] + (local_users if local_users else "Failed to list local users.") + COLOR['reset'])
             print_message(f"{EMOJI['success']} Local users displayed.", "success")
+        elif choice == '7': # New Flush DNS
+            print_message(f"\n{EMOJI['info']} Flushing DNS Cache...", "info")
+            flush_result = run_command("ipconfig /flushdns")
+            if flush_result is not None:
+                print_message(f"{EMOJI['success']} DNS cache flushed successfully.", "success")
+                print(COLOR['output'] + flush_result + COLOR['reset'])
+            else:
+                print_message(f"{EMOJI['error']} Failed to flush DNS cache.", "error")
+        elif choice == '8': # New View Installed Programs
+            print_message(f"\n{EMOJI['info']} Viewing Installed Programs (Get-Package):", "info")
+            installed_programs = run_command("powershell -command \"Get-Package | Format-Table Name, Version -AutoSize\"")
+            print(COLOR['output'] + (installed_programs if installed_programs else "Failed to retrieve installed programs.") + COLOR['reset'])
+            print_message(f"{EMOJI['success']} Installed programs displayed.", "success")
+        elif choice == '9': # New View System Uptime
+            print_message(f"\n{EMOJI['info']} Viewing System Uptime:", "info")
+            uptime_info = run_command("powershell -command \"(Get-CimInstance -ClassName Win32_OperatingSystem).LastBootUpTime\"")
+            if uptime_info:
+                # Convert to datetime object for easier calculation
+                try:
+                    boot_time_str = uptime_info.split('.')[0] # Remove milliseconds
+                    boot_time = datetime.strptime(boot_time_str, '%Y%m%d%H%M%S')
+                    current_time = datetime.now()
+                    uptime_duration = current_time - boot_time
+                    print_message(f"\n{EMOJI['success']} Last Boot Up Time: {COLOR['output']}{boot_time}{COLOR['reset']}", "success")
+                    print_message(f"{EMOJI['success']} System Uptime: {COLOR['output']}{uptime_duration}{COLOR['reset']}", "success")
+                except ValueError:
+                    print_message(f"{EMOJI['warning']} Could not parse uptime information: {uptime_info}", "warning")
+            else:
+                print_message(f"{EMOJI['error']} Failed to retrieve system uptime.", "error")
         elif choice == 'b':
             break
         else:
@@ -1274,10 +1434,12 @@ def display_main_menu():
     print(f"{COLOR['menu_option']}12. {EMOJI['monitor']} Monitoring & Logging Tools{COLOR['reset']}")
     print(f"{COLOR['menu_option']}13. {EMOJI['package']} Package Management Tools{COLOR['reset']}")
     print(f"{COLOR['menu_option']}14. {EMOJI['config']} Configuration Management Tools{COLOR['reset']}")
-    print(f"{COLOR['menu_option']}15. {EMOJI['automation']} Automation & Scheduling Tools{COLOR['reset']}") # New Category
-    print(f"{COLOR['menu_option']}16. {EMOJI['dev']} Development Utilities{COLOR['reset']}") # New Category
-    print(f"{COLOR['menu_option']}17. {EMOJI['windows']} Windows Specific Tools{COLOR['reset']}") # New Category
-    print(f"{COLOR['menu_option']}18. {EMOJI['exit']} Exit{COLOR['reset']}") # Updated Exit option
+    print(f"{COLOR['menu_option']}15. {EMOJI['automation']} Automation & Scheduling Tools{COLOR['reset']}")
+    print(f"{COLOR['menu_option']}16. {EMOJI['dev']} Development Utilities{COLOR['reset']}")
+    print(f"{COLOR['menu_option']}17. {EMOJI['kubernetes']} Kubernetes Utilities{COLOR['reset']}") # New Category
+    print(f"{COLOR['menu_option']}18. {EMOJI['web']} Web Server Utilities{COLOR['reset']}") # New Category
+    print(f"{COLOR['menu_option']}19. {EMOJI['windows']} Windows Specific Tools{COLOR['reset']}") # Updated option number
+    print(f"{COLOR['menu_option']}20. {EMOJI['exit']} Exit{COLOR['reset']}") # Updated Exit option number
     print(f"{COLOR['header']}{EMOJI['separator'] * 3}{COLOR['reset']}")
 
 def main():
@@ -1317,20 +1479,24 @@ def main():
             package_management_tools()
         elif choice == '14':
             configuration_management_tools()
-        elif choice == '15': # New option number
+        elif choice == '15':
             automation_scheduling_tools()
-        elif choice == '16': # New option number
+        elif choice == '16':
             development_utilities()
         elif choice == '17': # New option number
+            kubernetes_utilities()
+        elif choice == '18': # New option number
+            web_server_utilities()
+        elif choice == '19': # Updated option number
             windows_specific_tools()
-        elif choice == '18': # Updated Exit option number
+        elif choice == '20': # Updated Exit option number
             print_message(f"{EMOJI['exit']} Exiting {APP_NAME}. Goodbye! {EMOJI['exit']}", "info")
             break
         else:
             print_message(f"{EMOJI['warning']} Invalid choice. Please select a valid option from the menu.", "warning")
         
         # Pause before showing menu again, unless exiting
-        if choice != '18': # Updated Exit option number
+        if choice != '20': # Updated Exit option number
             input(f"{COLOR['prompt']}{EMOJI['input']} Press Enter to continue...{COLOR['reset']}")
             os.system('cls' if os.name == 'nt' else 'clear') # Clear screen for better readability
 
