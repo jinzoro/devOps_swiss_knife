@@ -1,3 +1,5 @@
+![Badge Alt Text](https://img.shields.io/badge/subject-status-color.svg)
+
 # **DevOps Swiss Army Knife 🛠️**
 
 ## **Version: 1.4.0**
