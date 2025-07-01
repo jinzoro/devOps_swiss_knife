@@ -1,4 +1,4 @@
-![Versatility](https://img.shields.io/badge/Capability-Versatile-indigo?style=for-the-badge&logo=python&logoColor=white) ![Professional Quality](https://img.shields.io/badge/Quality-Professional-purple?style=for-the-badge&logo=github&logoColor=white)
+![Versatility](https://img.shields.io/badge/Capability-Versatile-indigo?style=for-the-badge&logo=python&logoColor=white) ![Professional Quality](https://img.shields.io/badge/Quality-Professional-purple?style=for-the-badge&logo=github&logoColor=white) ![Linux Compatible](https://img.shields.io/badge/OS-Linux-orange?style=for-the-badge&logo=linux&logoColor=white) ![Windows Compatible](https://img.shields.io/badge/OS-Windows-blue?style=for-the-badge&logo=windows&logoColor=white)
 
 # **DevOps Swiss Army Knife 🛠️**
 
