@@ -32,11 +32,14 @@ The goal is to provide a comprehensive "Swiss Army Knife" for daily operational 
 
 1. **Save the Script:** Save the entire Python code into a single file, for example, devops\_swiss\_knife.py.  
 2. **Install Python Dependencies:** Open your terminal or command prompt and install the required Python packages:  
+
+```
    pip install colorama pyyaml
+```
 
    * colorama: For colorful terminal output.  
    * pyyaml: For YAML formatting (optional, but recommended for full functionality).  
-3. Ensure External Tools (Prerequisites):  
+4. Ensure External Tools (Prerequisites):  
    Many functionalities rely on external command-line tools. Ensure they are installed and available in your system's PATH:  
    * openssl: For SSL/TLS utilities.  
    * docker: For Container utilities.  
@@ -51,9 +54,12 @@ The goal is to provide a comprehensive "Swiss Army Knife" for daily operational 
 
 ## **🏃 Usage**
 
+
 To start the DevOps Swiss Army Knife, navigate to the directory where you saved devops\_swiss\_knife.py and run the script:
 
-python devops\_swiss\_knife.py
+```
+python devops_swiss_knife.py
+```
 
 Follow the interactive, menu-driven prompts to select and execute the desired tools.
 
