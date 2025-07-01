@@ -71,4 +71,4 @@ Feel free to extend this toolbox\! If you have ideas for new tools or improvemen
 
 ## **📄 License**
 
-This project is open-source and available under the [MIT License](https://www.google.com/search?q=LICENSE).
+This project is open-source and available under the [Jinzoro License](https://www.google.com/search?q=LICENSE).
