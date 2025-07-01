@@ -33,15 +33,15 @@ except ImportError:
 
 # --- Configuration & Constants ---
 APP_NAME = "DevOps Swiss Army Knife 🛠️"
-VERSION = "1.5.0" # Updated version for new categories and features
+VERSION = "1.6.0" # Updated version for new categories and features
 
 # Emojis for better visual organization
 EMOJI = {
     "system": "💻",
     "process": "⚙️",
-    "network": "�",
+    "network": "🌐",
     "file": "📁",
-    "container": "🐳",
+    "container": "�",
     "git": "🌳",
     "text": "📝",
     "security": "🔒",
@@ -71,6 +71,9 @@ EMOJI = {
     "run": "▶️",
     "pull": "⬇️",
     "push": "⬆️",
+    "firewall": "🧱", # New emoji for Firewall
+    "disk": "💽", # New emoji for Disk
+    "share": "🤝", # New emoji for Shares
 }
 
 # Colors for output
@@ -241,8 +244,8 @@ def network_utilities():
         print(f"{COLOR['menu_option']}4. DNS Lookup (nslookup){COLOR['reset']}")
         print(f"{COLOR['menu_option']}5. View Network Connections (netstat){COLOR['reset']}")
         print(f"{COLOR['menu_option']}6. Make a Basic HTTP GET Request (curl){COLOR['reset']}")
-        print(f"{COLOR['menu_option']}7. Whois Lookup{COLOR['reset']}") # New
-        print(f"{COLOR['menu_option']}8. Dig/Host DNS Query{COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}7. Whois Lookup{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}8. Dig/Host DNS Query{COLOR['reset']}")
         print(f"{COLOR['menu_option']}b. Back to Main Menu{COLOR['reset']}")
 
         choice = input(f"{COLOR['prompt']}{EMOJI['input']} Enter your choice: {COLOR['reset']}").strip().lower()
@@ -1273,6 +1276,9 @@ def web_server_utilities():
     while True:
         print(f"\n{COLOR['menu_option']}1. Check Nginx/Apache Status (Linux/macOS){COLOR['reset']}")
         print(f"{COLOR['menu_option']}2. Get HTTP Response Headers (curl -I){COLOR['reset']}")
+        print(f"{COLOR['menu_option']}3. Check if Port is Listening Locally (netstat){COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}4. View Web Server Config File (Linux/macOS){COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}5. Test URL for Redirects (curl){COLOR['reset']}") # New
         print(f"{COLOR['menu_option']}b. Back to Main Menu{COLOR['reset']}")
 
         choice = input(f"{COLOR['prompt']}{EMOJI['input']} Enter your choice: {COLOR['reset']}").strip().lower()
@@ -1306,6 +1312,51 @@ def web_server_utilities():
                 print_message(f"{EMOJI['success']} HTTP header check completed.", "success")
             else:
                 print_message(f"{EMOJI['warning']} URL cannot be empty.", "warning")
+        elif choice == '3': # New: Check if Port is Listening Locally
+            port = input(f"{COLOR['prompt']}{EMOJI['input']} Enter port to check for local listening (e.g., 80, 443, 8080): {COLOR['reset']}").strip()
+            if port.isdigit():
+                if platform.system() in ["Linux", "Darwin"]:
+                    check_cmd = f"netstat -tulnp | grep ':{port}'"
+                elif platform.system() == "Windows":
+                    check_cmd = f"netstat -ano | findstr \":{port}\" | findstr \"LISTENING\""
+                else:
+                    print_message("Local port check not supported on this OS.", "error")
+                    continue
+                
+                listen_status = run_command(check_cmd)
+                if listen_status:
+                    print_message(f"\n{EMOJI['success']} Port {port} is listening locally:\n{COLOR['output']}{listen_status}{COLOR['reset']}", "success")
+                else:
+                    print_message(f"{EMOJI['warning']} Port {port} does not appear to be listening locally.", "warning")
+            else:
+                print_message(f"{EMOJI['warning']} Invalid port. Please enter a number.", "warning")
+        elif choice == '4': # New: View Web Server Config File
+            if platform.system() in ["Linux", "Darwin"]:
+                config_path = input(f"{COLOR['prompt']}{EMOJI['input']} Enter path to web server config (e.g., /etc/nginx/nginx.conf, /etc/apache2/apache2.conf): {COLOR['reset']}").strip()
+                if config_path:
+                    if os.path.exists(config_path):
+                        config_content = run_command(f"cat {config_path}")
+                        if config_content:
+                            print_message(f"\n{EMOJI['info']} Content of '{config_path}':\n{COLOR['output']}{config_content}{COLOR['reset']}", "info")
+                        else:
+                            print_message(f"{EMOJI['warning']} Config file '{config_path}' is empty or could not be read.", "warning")
+                    else:
+                        print_message(f"{EMOJI['warning']} Config file '{config_path}' not found.", "warning")
+                else:
+                    print_message(f"{EMOJI['warning']} Config file path cannot be empty.", "warning")
+            else:
+                print_message(f"{EMOJI['warning']} This option is primarily for Linux/macOS systems.", "warning")
+        elif choice == '5': # New: Test URL for Redirects
+            url = input(f"{COLOR['prompt']}{EMOJI['input']} Enter URL to test for redirects (e.g., http://old-site.com): {COLOR['reset']}").strip()
+            if url:
+                # Use -L to follow redirects, -v for verbose output including headers, --stderr - to redirect stderr to stdout
+                redirect_output = run_command(f"curl -L -v {url} 2>&1 | grep -E '^(< Location:|HTTP/)'")
+                if redirect_output:
+                    print_message(f"\n{EMOJI['success']} Redirect Chain for {url}:\n{COLOR['output']}{redirect_output}{COLOR['reset']}", "success")
+                else:
+                    print_message(f"{EMOJI['info']} No redirects found or failed to connect for {url}.", "info")
+            else:
+                print_message(f"{EMOJI['warning']} URL cannot be empty.", "warning")
         elif choice == 'b':
             break
         else:
@@ -1323,12 +1374,16 @@ def windows_specific_tools():
         print(f"\n{COLOR['menu_option']}1. List Windows Services{COLOR['reset']}")
         print(f"{COLOR['menu_option']}2. Start a Windows Service{COLOR['reset']}")
         print(f"{COLOR['menu_option']}3. Stop a Windows Service{COLOR['reset']}")
-        print(f"{COLOR['menu_option']}4. Restart a Windows Service{COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}4. Restart a Windows Service{COLOR['reset']}")
         print(f"{COLOR['menu_option']}5. View Network Adapters (PowerShell){COLOR['reset']}")
         print(f"{COLOR['menu_option']}6. List Local Users{COLOR['reset']}")
-        print(f"{COLOR['menu_option']}7. Flush DNS Cache{COLOR['reset']}") # New
-        print(f"{COLOR['menu_option']}8. View Installed Programs (PowerShell){COLOR['reset']}") # New
-        print(f"{COLOR['menu_option']}9. View System Uptime{COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}7. Flush DNS Cache{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}8. View Installed Programs (PowerShell){COLOR['reset']}")
+        print(f"{COLOR['menu_option']}9. View System Uptime{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}10. {EMOJI['firewall']} Manage Windows Firewall Rules (List/Add/Delete){COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}11. {EMOJI['disk']} Check Disk Health (chkdsk){COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}12. {EMOJI['share']} List Network Shares{COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}13. View Detailed Process Info (wmic){COLOR['reset']}") # New
         print(f"{COLOR['menu_option']}b. Back to Main Menu{COLOR['reset']}")
 
         choice = input(f"{COLOR['prompt']}{EMOJI['input']} Enter your choice: {COLOR['reset']}").strip().lower()
@@ -1410,6 +1465,68 @@ def windows_specific_tools():
                     print_message(f"{EMOJI['warning']} Could not parse uptime information: {uptime_info}", "warning")
             else:
                 print_message(f"{EMOJI['error']} Failed to retrieve system uptime.", "error")
+        elif choice == '10': # New: Manage Windows Firewall Rules
+            print_header(f"{EMOJI['firewall']} Windows Firewall Management")
+            while True:
+                print(f"\n{COLOR['menu_option']}1. List Firewall Rules{COLOR['reset']}")
+                print(f"{COLOR['menu_option']}2. Add Inbound Port Rule{COLOR['reset']}")
+                print(f"{COLOR['menu_option']}3. Delete Firewall Rule by Name{COLOR['reset']}")
+                print(f"{COLOR['menu_option']}b. Back to Windows Specific Tools{COLOR['reset']}")
+                fw_choice = input(f"{COLOR['prompt']}{EMOJI['input']} Enter your choice: {COLOR['reset']}").strip().lower()
+
+                if fw_choice == '1':
+                    rules = run_command("netsh advfirewall firewall show rule name=all")
+                    print(COLOR['output'] + (rules if rules else "No firewall rules found or command failed.") + COLOR['reset'])
+                    print_message(f"{EMOJI['success']} Firewall rules listed.", "success")
+                elif fw_choice == '2':
+                    rule_name = input(f"{COLOR['prompt']}{EMOJI['input']} Enter rule name: {COLOR['reset']}").strip()
+                    port = input(f"{COLOR['prompt']}{EMOJI['input']} Enter port number: {COLOR['reset']}").strip()
+                    protocol = input(f"{COLOR['prompt']}{EMOJI['input']} Enter protocol (TCP/UDP/Any): {COLOR['reset']}").strip()
+                    if rule_name and port.isdigit() and protocol:
+                        add_cmd = f"netsh advfirewall firewall add rule name=\"{rule_name}\" dir=in action=allow protocol={protocol} localport={port}"
+                        add_result = run_command(add_cmd)
+                        if add_result is not None:
+                            print_message(f"{EMOJI['success']} Inbound rule '{rule_name}' added successfully.", "success")
+                        else:
+                            print_message(f"{EMOJI['error']} Failed to add firewall rule.", "error")
+                    else:
+                        print_message(f"{EMOJI['warning']} Rule name, port, and protocol cannot be empty. Port must be a number.", "warning")
+                elif fw_choice == '3':
+                    rule_name = input(f"{COLOR['prompt']}{EMOJI['input']} Enter rule name to delete: {COLOR['reset']}").strip()
+                    if rule_name:
+                        delete_cmd = f"netsh advfirewall firewall delete rule name=\"{rule_name}\""
+                        delete_result = run_command(delete_cmd)
+                        if delete_result is not None:
+                            print_message(f"{EMOJI['success']} Rule '{rule_name}' deleted successfully.", "success")
+                        else:
+                            print_message(f"{EMOJI['error']} Failed to delete firewall rule.", "error")
+                    else:
+                        print_message(f"{EMOJI['warning']} Rule name cannot be empty.", "warning")
+                elif fw_choice == 'b':
+                    break
+                else:
+                    print_message(f"{EMOJI['warning']} Invalid choice. Please try again.", "warning")
+        elif choice == '11': # New: Check Disk Health
+            drive_letter = input(f"{COLOR['prompt']}{EMOJI['input']} Enter drive letter to check (e.g., C:): {COLOR['reset']}").strip().upper()
+            if drive_letter and drive_letter.endswith(':'):
+                print_message(f"\n{EMOJI['info']} Checking disk health for {drive_letter} (chkdsk)...", "info")
+                # /F fixes errors on the disk, /R locates bad sectors and recovers readable information
+                # /X forces the volume to dismount first if necessary
+                chkdsk_output = run_command(f"chkdsk {drive_letter} /F /R /X", capture_output=False, check=False) # Direct output, can be long
+                print_message(f"{EMOJI['success']} Chkdsk initiated for {drive_letter}. Check console output for details.", "success")
+            else:
+                print_message(f"{EMOJI['warning']} Invalid drive letter. Please enter in format like 'C:'.", "warning")
+        elif choice == '12': # New: List Network Shares
+            print_message(f"\n{EMOJI['info']} Listing Network Shares (net share):", "info")
+            shares = run_command("net share")
+            print(COLOR['output'] + (shares if shares else "No network shares found or command failed.") + COLOR['reset'])
+            print_message(f"{EMOJI['success']} Network shares listed.", "success")
+        elif choice == '13': # New: View Detailed Process Info
+            print_message(f"\n{EMOJI['info']} Viewing Detailed Process Information (wmic process get):", "info")
+            # Common useful properties: Name, ProcessId, CommandLine, ExecutablePath, WorkingSetSize, ThreadCount
+            process_info = run_command("wmic process get Name,ProcessId,CommandLine,ExecutablePath,WorkingSetSize,ThreadCount /format:list")
+            print(COLOR['output'] + (process_info if process_info else "Failed to retrieve detailed process info.") + COLOR['reset'])
+            print_message(f"{EMOJI['success']} Detailed process information displayed.", "success")
         elif choice == 'b':
             break
         else:
@@ -1436,10 +1553,10 @@ def display_main_menu():
     print(f"{COLOR['menu_option']}14. {EMOJI['config']} Configuration Management Tools{COLOR['reset']}")
     print(f"{COLOR['menu_option']}15. {EMOJI['automation']} Automation & Scheduling Tools{COLOR['reset']}")
     print(f"{COLOR['menu_option']}16. {EMOJI['dev']} Development Utilities{COLOR['reset']}")
-    print(f"{COLOR['menu_option']}17. {EMOJI['kubernetes']} Kubernetes Utilities{COLOR['reset']}") # New Category
-    print(f"{COLOR['menu_option']}18. {EMOJI['web']} Web Server Utilities{COLOR['reset']}") # New Category
-    print(f"{COLOR['menu_option']}19. {EMOJI['windows']} Windows Specific Tools{COLOR['reset']}") # Updated option number
-    print(f"{COLOR['menu_option']}20. {EMOJI['exit']} Exit{COLOR['reset']}") # Updated Exit option number
+    print(f"{COLOR['menu_option']}17. {EMOJI['kubernetes']} Kubernetes Utilities{COLOR['reset']}")
+    print(f"{COLOR['menu_option']}18. {EMOJI['web']} Web Server Utilities{COLOR['reset']}")
+    print(f"{COLOR['menu_option']}19. {EMOJI['windows']} Windows Specific Tools{COLOR['reset']}")
+    print(f"{COLOR['menu_option']}20. {EMOJI['exit']} Exit{COLOR['reset']}")
     print(f"{COLOR['header']}{EMOJI['separator'] * 3}{COLOR['reset']}")
 
 def main():
@@ -1483,22 +1600,23 @@ def main():
             automation_scheduling_tools()
         elif choice == '16':
             development_utilities()
-        elif choice == '17': # New option number
+        elif choice == '17':
             kubernetes_utilities()
-        elif choice == '18': # New option number
+        elif choice == '18':
             web_server_utilities()
-        elif choice == '19': # Updated option number
+        elif choice == '19':
             windows_specific_tools()
-        elif choice == '20': # Updated Exit option number
+        elif choice == '20':
             print_message(f"{EMOJI['exit']} Exiting {APP_NAME}. Goodbye! {EMOJI['exit']}", "info")
             break
         else:
             print_message(f"{EMOJI['warning']} Invalid choice. Please select a valid option from the menu.", "warning")
         
         # Pause before showing menu again, unless exiting
-        if choice != '20': # Updated Exit option number
+        if choice != '20':
             input(f"{COLOR['prompt']}{EMOJI['input']} Press Enter to continue...{COLOR['reset']}")
             os.system('cls' if os.name == 'nt' else 'clear') # Clear screen for better readability
 
 if __name__ == "__main__":
     main()
+    
