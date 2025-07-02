@@ -8,7 +8,7 @@ import hashlib
 import random
 import string
 import uuid # For generating UUIDs
-from datetime import datetime
+from datetime import datetime, timedelta # Added timedelta for uptime calculation
 import urllib.parse # For URL encoding/decoding
 
 # --- Third-party libraries (install if not present) ---
@@ -33,15 +33,15 @@ except ImportError:
 
 # --- Configuration & Constants ---
 APP_NAME = "DevOps Swiss Army Knife 🛠️"
-VERSION = "1.6.0" # Updated version for new categories and features
+VERSION = "1.7.0" # Updated version for new categories and features
 
 # Emojis for better visual organization
 EMOJI = {
-    "system": "💻",
+    "system": "�",
     "process": "⚙️",
     "network": "🌐",
     "file": "📁",
-    "container": "�",
+    "container": "🐳",
     "git": "🌳",
     "text": "📝",
     "security": "🔒",
@@ -56,6 +56,8 @@ EMOJI = {
     "windows": "🪟", # New emoji for Windows Specific Tools
     "kubernetes": "☸️", # New emoji for Kubernetes
     "web": "🕸️", # New emoji for Web Server Utilities
+    "database": "🗄️", # New emoji for Database Utilities
+    "virtualization": "🖥️", # New emoji for Virtualization Utilities
     "exit": "👋",
     "menu": "📖",
     "success": "✅",
@@ -74,6 +76,7 @@ EMOJI = {
     "firewall": "🧱", # New emoji for Firewall
     "disk": "💽", # New emoji for Disk
     "share": "🤝", # New emoji for Shares
+    "clear": "🧹", # New emoji for Clear Screen
 }
 
 # Colors for output
@@ -162,7 +165,7 @@ def display_system_info():
     # Common Linux/macOS commands
     if platform.system() in ["Linux", "Darwin"]:
         print_message(f"\n{EMOJI['info']} CPU Info (lscpu/sysctl):", "info")
-        cpu_info = run_command("lscpu" if platform.system() == "Linux" else "sysctl -n machdep.cpu.brand_string")
+        cpu_info = run_command("lscpu" if run_command("which lscpu", check=False) else "sysctl -n machdep.cpu.brand_string")
         print(COLOR['output'] + (cpu_info if cpu_info else "N/A") + COLOR['reset'])
 
         print_message(f"\n{EMOJI['info']} Memory Usage (free -h):", "info")
@@ -173,9 +176,22 @@ def display_system_info():
         disk_info = run_command("df -h")
         print(COLOR['output'] + (disk_info if disk_info else "N/A") + COLOR['reset'])
 
+        print_message(f"\n{EMOJI['info']} Inode Usage (df -i):", "info") # New
+        inode_info = run_command("df -i")
+        print(COLOR['output'] + (inode_info if inode_info else "N/A") + COLOR['reset'])
+
         print_message(f"\n{EMOJI['info']} Network Interfaces (ip a/ifconfig):", "info")
-        net_info = run_command("ip a" if platform.system() == "Linux" else "ifconfig")
+        net_info = run_command("ip a" if run_command("which ip", check=False) else "ifconfig")
         print(COLOR['output'] + (net_info if net_info else "N/A") + COLOR['reset'])
+
+        print_message(f"\n{EMOJI['info']} Uptime (uptime):", "info") # Cross-platform uptime
+        uptime_info = run_command("uptime")
+        print(COLOR['output'] + (uptime_info if uptime_info else "N/A") + COLOR['reset'])
+
+        print_message(f"\n{EMOJI['info']} Logged-in Users (who):", "info") # New
+        who_info = run_command("who")
+        print(COLOR['output'] + (who_info if who_info else "N/A") + COLOR['reset'])
+
     elif platform.system() == "Windows":
         print_message(f"\n{EMOJI['info']} System Info (systeminfo):", "info")
         sys_info = run_command("systeminfo | findstr /B /C:\"OS Name\" /C:\"OS Version\" /C:\"System Type\" /C:\"Total Physical Memory\"")
@@ -184,6 +200,11 @@ def display_system_info():
         print_message(f"\n{EMOJI['info']} IP Configuration (ipconfig):", "info")
         ip_config = run_command("ipconfig /all")
         print(COLOR['output'] + (ip_config if ip_config else "N/A") + COLOR['reset'])
+
+        # Windows uptime is handled in Windows Specific Tools for more detail
+        print_message(f"\n{EMOJI['info']} Logged-in Users (query user):", "info") # New
+        who_info = run_command("query user")
+        print(COLOR['output'] + (who_info if who_info else "N/A") + COLOR['reset'])
     else:
         print_message("Detailed system info commands are not implemented for this OS.", "warning")
 
@@ -196,12 +217,14 @@ def manage_processes():
     while True:
         print(f"\n{COLOR['menu_option']}1. List all processes{COLOR['reset']}")
         print(f"{COLOR['menu_option']}2. Kill a process by PID{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}3. Find process by name{COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}4. View process tree{COLOR['reset']}") # New
         print(f"{COLOR['menu_option']}b. Back to Main Menu{COLOR['reset']}")
 
         choice = input(f"{COLOR['prompt']}{EMOJI['input']} Enter your choice: {COLOR['reset']}").strip().lower()
 
         if choice == '1':
-            print_message(f"\n{EMOJI['info']} Listing processes (ps aux):", "info")
+            print_message(f"\n{EMOJI['info']} Listing processes (ps aux / tasklist):", "info")
             if platform.system() in ["Linux", "Darwin"]:
                 processes = run_command("ps aux")
             elif platform.system() == "Windows":
@@ -228,6 +251,34 @@ def manage_processes():
                     print_message(f"{EMOJI['error']} Failed to kill process {pid}.", "error")
             else:
                 print_message(f"{EMOJI['warning']} Invalid PID. Please enter a number.", "warning")
+        elif choice == '3': # New: Find process by name
+            process_name = input(f"{COLOR['prompt']}{EMOJI['input']} Enter process name to find (e.g., nginx, chrome): {COLOR['reset']}").strip()
+            if process_name:
+                if platform.system() in ["Linux", "Darwin"]:
+                    find_cmd = f"pgrep -l '{process_name}'"
+                elif platform.system() == "Windows":
+                    find_cmd = f"tasklist /FI \"IMAGENAME eq {process_name}.exe\""
+                else:
+                    print_message("Finding processes by name not supported on this OS.", "error")
+                    continue
+                found_processes = run_command(find_cmd)
+                print(COLOR['output'] + (found_processes if found_processes else f"No process named '{process_name}' found.") + COLOR['reset'])
+                print_message(f"{EMOJI['success']} Process search completed.", "success")
+            else:
+                print_message(f"{EMOJI['warning']} Process name cannot be empty.", "warning")
+        elif choice == '4': # New: View process tree
+            print_message(f"\n{EMOJI['info']} Viewing process tree:", "info")
+            if platform.system() in ["Linux", "Darwin"]:
+                # pstree might not be installed by default, fall back to ps auxf
+                tree_cmd = "pstree -p" if run_command("which pstree", check=False) else "ps auxf"
+            elif platform.system() == "Windows":
+                tree_cmd = "tasklist /svc /FI \"PID ne 0\" /FO LIST" # Basic tree-like output with services
+            else:
+                print_message("Process tree not supported on this OS.", "error")
+                continue
+            process_tree = run_command(tree_cmd)
+            print(COLOR['output'] + (process_tree if process_tree else "Failed to retrieve process tree.") + COLOR['reset'])
+            print_message(f"{EMOJI['success']} Process tree displayed.", "success")
         elif choice == 'b':
             break
         else:
@@ -246,6 +297,8 @@ def network_utilities():
         print(f"{COLOR['menu_option']}6. Make a Basic HTTP GET Request (curl){COLOR['reset']}")
         print(f"{COLOR['menu_option']}7. Whois Lookup{COLOR['reset']}")
         print(f"{COLOR['menu_option']}8. Dig/Host DNS Query{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}9. Show Routing Table{COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}10. View ARP Cache{COLOR['reset']}") # New
         print(f"{COLOR['menu_option']}b. Back to Main Menu{COLOR['reset']}")
 
         choice = input(f"{COLOR['prompt']}{EMOJI['input']} Enter your choice: {COLOR['reset']}").strip().lower()
@@ -327,7 +380,7 @@ def network_utilities():
                     print_message(f"{EMOJI['error']} Failed to make HTTP GET request. Is curl installed?", "error")
             else:
                 print_message(f"{EMOJI['warning']} URL cannot be empty.", "warning")
-        elif choice == '7': # New Whois
+        elif choice == '7': # Whois
             domain = input(f"{COLOR['prompt']}{EMOJI['input']} Enter domain for Whois lookup (e.g., google.com): {COLOR['reset']}").strip()
             if domain:
                 whois_output = run_command(f"whois {domain}")
@@ -335,7 +388,7 @@ def network_utilities():
                 print_message(f"{EMOJI['success']} Whois lookup completed.", "success")
             else:
                 print_message(f"{EMOJI['warning']} Domain cannot be empty.", "warning")
-        elif choice == '8': # New Dig/Host
+        elif choice == '8': # Dig/Host
             hostname = input(f"{COLOR['prompt']}{EMOJI['input']} Enter hostname for DNS query (e.g., example.com A): {COLOR['reset']}").strip()
             if hostname:
                 if platform.system() in ["Linux", "Darwin"]:
@@ -350,6 +403,23 @@ def network_utilities():
                 print_message(f"{EMOJI['success']} DNS query completed.", "success")
             else:
                 print_message(f"{EMOJI['warning']} Hostname cannot be empty.", "warning")
+        elif choice == '9': # New: Show Routing Table
+            print_message(f"\n{EMOJI['info']} Showing Routing Table:", "info")
+            if platform.system() in ["Linux", "Darwin"]:
+                route_cmd = "ip r" if run_command("which ip", check=False) else "route -n"
+            elif platform.system() == "Windows":
+                route_cmd = "route print"
+            else:
+                print_message("Routing table display not supported on this OS.", "error")
+                continue
+            route_output = run_command(route_cmd)
+            print(COLOR['output'] + (route_output if route_output else "Failed to retrieve routing table.") + COLOR['reset'])
+            print_message(f"{EMOJI['success']} Routing table displayed.", "success")
+        elif choice == '10': # New: View ARP Cache
+            print_message(f"\n{EMOJI['info']} Viewing ARP Cache:", "info")
+            arp_output = run_command("arp -a")
+            print(COLOR['output'] + (arp_output if arp_output else "Failed to retrieve ARP cache.") + COLOR['reset'])
+            print_message(f"{EMOJI['success']} ARP cache displayed.", "success")
         elif choice == 'b':
             break
         else:
@@ -366,6 +436,10 @@ def file_operations():
         print(f"{COLOR['menu_option']}4. {EMOJI['create']} Create a directory{COLOR['reset']}")
         print(f"{COLOR['menu_option']}5. {EMOJI['delete']} Delete a file{COLOR['reset']}")
         print(f"{COLOR['menu_option']}6. View File Content (tail/cat){COLOR['reset']}")
+        print(f"{COLOR['menu_option']}7. Calculate File Checksum (MD5/SHA256){COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}8. Compress File (Zip){COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}9. Decompress File (Unzip){COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}10. Change File Permissions (chmod - Linux/macOS){COLOR['reset']}") # New
         print(f"{COLOR['menu_option']}b. Back to Main Menu{COLOR['reset']}")
 
         choice = input(f"{COLOR['prompt']}{EMOJI['input']} Enter your choice: {COLOR['reset']}").strip().lower()
@@ -398,7 +472,7 @@ def file_operations():
         elif choice == '3':
             print_message(f"\n{EMOJI['info']} Listing directory tree (tree/dir /s /b):", "info")
             if platform.system() in ["Linux", "Darwin"]:
-                tree_output = run_command("tree -L 2" if run_command("which tree") else "ls -R") # Use tree if available, else ls -R
+                tree_output = run_command("tree -L 2" if run_command("which tree", check=False) else "ls -R") # Use tree if available, else ls -R
             elif platform.system() == "Windows":
                 tree_output = run_command("cmd /c \"dir /s /b\"") # Basic recursive listing
             else:
@@ -449,6 +523,74 @@ def file_operations():
                     print_message(f"{EMOJI['warning']} File '{file_path}' not found.", "warning")
             else:
                 print_message(f"{EMOJI['warning']} File path cannot be empty.", "warning")
+        elif choice == '7': # New: Calculate File Checksum
+            file_path = input(f"{COLOR['prompt']}{EMOJI['input']} Enter path to file to calculate checksum: {COLOR['reset']}").strip()
+            if file_path and os.path.exists(file_path):
+                print_message(f"\n{EMOJI['info']} Calculating checksum for '{file_path}'...", "info")
+                try:
+                    with open(file_path, 'rb') as f:
+                        file_content = f.read()
+                        md5_hash = hashlib.md5(file_content).hexdigest()
+                        sha256_hash = hashlib.sha256(file_content).hexdigest()
+                        print_message(f"{EMOJI['success']} MD5: {COLOR['output']}{md5_hash}{COLOR['reset']}", "success")
+                        print_message(f"{EMOJI['success']} SHA256: {COLOR['output']}{sha256_hash}{COLOR['reset']}", "success")
+                except Exception as e:
+                    print_message(f"{EMOJI['error']} Error calculating checksum: {e}", "error")
+            else:
+                print_message(f"{EMOJI['warning']} File '{file_path}' not found or path empty.", "warning")
+        elif choice == '8': # New: Compress File (Zip)
+            file_to_zip = input(f"{COLOR['prompt']}{EMOJI['input']} Enter file/directory to zip: {COLOR['reset']}").strip()
+            zip_name = input(f"{COLOR['prompt']}{EMOJI['input']} Enter output zip file name (e.g., archive.zip): {COLOR['reset']}").strip()
+            if file_to_zip and zip_name:
+                if platform.system() in ["Linux", "Darwin"]:
+                    zip_cmd = f"zip -r {zip_name} {file_to_zip}"
+                elif platform.system() == "Windows":
+                    # PowerShell command to compress-archive
+                    zip_cmd = f"powershell -command \"Compress-Archive -Path '{file_to_zip}' -DestinationPath '{zip_name}' -Force\""
+                else:
+                    print_message("Compression not supported on this OS.", "error")
+                    continue
+                
+                zip_result = run_command(zip_cmd)
+                if zip_result is not None:
+                    print_message(f"{EMOJI['success']} '{file_to_zip}' compressed to '{zip_name}' successfully.", "success")
+                else:
+                    print_message(f"{EMOJI['error']} Failed to compress '{file_to_zip}'.", "error")
+            else:
+                print_message(f"{EMOJI['warning']} Input file/directory and zip name cannot be empty.", "warning")
+        elif choice == '9': # New: Decompress File (Unzip)
+            zip_file = input(f"{COLOR['prompt']}{EMOJI['input']} Enter zip file to decompress: {COLOR['reset']}").strip()
+            dest_dir = input(f"{COLOR['prompt']}{EMOJI['input']} Enter destination directory (default: current): {COLOR['reset']}").strip() or "."
+            if zip_file:
+                if platform.system() in ["Linux", "Darwin"]:
+                    unzip_cmd = f"unzip {zip_file} -d {dest_dir}"
+                elif platform.system() == "Windows":
+                    unzip_cmd = f"powershell -command \"Expand-Archive -Path '{zip_file}' -DestinationPath '{dest_dir}' -Force\""
+                else:
+                    print_message("Decompression not supported on this OS.", "error")
+                    continue
+                
+                unzip_result = run_command(unzip_cmd)
+                if unzip_result is not None:
+                    print_message(f"{EMOJI['success']} '{zip_file}' decompressed to '{dest_dir}' successfully.", "success")
+                else:
+                    print_message(f"{EMOJI['error']} Failed to decompress '{zip_file}'.", "error")
+            else:
+                print_message(f"{EMOJI['warning']} Zip file cannot be empty.", "warning")
+        elif choice == '10': # New: Change File Permissions (chmod)
+            if platform.system() in ["Linux", "Darwin"]:
+                file_path = input(f"{COLOR['prompt']}{EMOJI['input']} Enter file path: {COLOR['reset']}").strip()
+                permissions = input(f"{COLOR['prompt']}{EMOJI['input']} Enter numeric permissions (e.g., 755): {COLOR['reset']}").strip()
+                if file_path and permissions.isdigit() and len(permissions) == 3:
+                    chmod_result = run_command(f"chmod {permissions} {file_path}")
+                    if chmod_result is not None:
+                        print_message(f"{EMOJI['success']} Permissions of '{file_path}' set to {permissions} successfully.", "success")
+                    else:
+                        print_message(f"{EMOJI['error']} Failed to change permissions. Check path and permissions.", "error")
+                else:
+                    print_message(f"{EMOJI['warning']} Invalid path or permissions. Permissions must be a 3-digit number (e.g., 755).", "warning")
+            else:
+                print_message(f"{EMOJI['warning']} 'chmod' is for Linux/macOS only.", "warning")
         elif choice == 'b':
             break
         else:
@@ -473,6 +615,10 @@ def container_utilities():
         print(f"{COLOR['menu_option']}6. {EMOJI['pull']} Pull a Docker image{COLOR['reset']}")
         print(f"{COLOR['menu_option']}7. {EMOJI['run']} Run a simple Docker container{COLOR['reset']}")
         print(f"{COLOR['menu_option']}8. View Container Logs{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}9. Start a container by name/ID{COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}10. Restart a container by name/ID{COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}11. Execute command in running container{COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}12. Remove all stopped containers{COLOR['reset']}") # New
         print(f"{COLOR['menu_option']}b. Back to Main Menu{COLOR['reset']}")
 
         choice = input(f"{COLOR['prompt']}{EMOJI['input']} Enter your choice: {COLOR['reset']}").strip().lower()
@@ -554,6 +700,48 @@ def container_utilities():
                     print_message(f"{EMOJI['error']} Failed to get logs for container '{container_id}'.", "error")
             else:
                 print_message(f"{EMOJI['warning']} Container name/ID cannot be empty.", "warning")
+        elif choice == '9': # New: Start container
+            container_id = input(f"{COLOR['prompt']}{EMOJI['input']} Enter container name or ID to START: {COLOR['reset']}").strip()
+            if container_id:
+                start_result = run_command(f"docker start {container_id}")
+                if start_result is not None:
+                    print_message(f"{EMOJI['success']} Container '{container_id}' started successfully.", "success")
+                else:
+                    print_message(f"{EMOJI['error']} Failed to start container '{container_id}'.", "error")
+            else:
+                print_message(f"{EMOJI['warning']} Container name/ID cannot be empty.", "warning")
+        elif choice == '10': # New: Restart container
+            container_id = input(f"{COLOR['prompt']}{EMOJI['input']} Enter container name or ID to RESTART: {COLOR['reset']}").strip()
+            if container_id:
+                restart_result = run_command(f"docker restart {container_id}")
+                if restart_result is not None:
+                    print_message(f"{EMOJI['success']} Container '{container_id}' restarted successfully.", "success")
+                else:
+                    print_message(f"{EMOJI['error']} Failed to restart container '{container_id}'.", "error")
+            else:
+                print_message(f"{EMOJI['warning']} Container name/ID cannot be empty.", "warning")
+        elif choice == '11': # New: Execute command in running container
+            container_id = input(f"{COLOR['prompt']}{EMOJI['input']} Enter running container name or ID: {COLOR['reset']}").strip()
+            exec_cmd = input(f"{COLOR['prompt']}{EMOJI['input']} Enter command to execute in container (e.g., ls -l /app): {COLOR['reset']}").strip()
+            if container_id and exec_cmd:
+                exec_result = run_command(f"docker exec {container_id} {exec_cmd}")
+                if exec_result is not None:
+                    print_message(f"{EMOJI['success']} Command executed in '{container_id}'. Output:\n{COLOR['output']}{exec_result}{COLOR['reset']}", "success")
+                else:
+                    print_message(f"{EMOJI['error']} Failed to execute command in '{container_id}'.", "error")
+            else:
+                print_message(f"{EMOJI['warning']} Container name/ID and command cannot be empty.", "warning")
+        elif choice == '12': # New: Remove all stopped containers
+            confirm = input(f"{COLOR['warning']}{EMOJI['warning']} Are you sure you want to remove ALL stopped containers? (y/n): {COLOR['reset']}").strip().lower()
+            if confirm == 'y':
+                rm_result = run_command("docker rm $(docker ps -aq --filter status=exited)")
+                if rm_result is not None:
+                    print_message(f"{EMOJI['success']} All stopped containers removed successfully.", "success")
+                    print(COLOR['output'] + rm_result + COLOR['reset'])
+                else:
+                    print_message(f"{EMOJI['error']} No stopped containers to remove or command failed.", "error")
+            else:
+                print_message(f"{EMOJI['info']} Operation cancelled.", "info")
         elif choice == 'b':
             break
         else:
@@ -578,6 +766,12 @@ def git_utilities():
         print(f"{COLOR['menu_option']}4. Git Diff (staged){COLOR['reset']}")
         print(f"{COLOR['menu_option']}5. {EMOJI['pull']} Git Pull (fetch and merge){COLOR['reset']}")
         print(f"{COLOR['menu_option']}6. {EMOJI['push']} Git Push (current branch){COLOR['reset']}")
+        print(f"{COLOR['menu_option']}7. Git Add files{COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}8. Git Commit changes{COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}9. Git Clone repository{COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}10. Git Checkout branch/commit{COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}11. Git Create new branch{COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}12. Git Delete branch (local){COLOR['reset']}") # New
         print(f"{COLOR['menu_option']}b. Back to Main Menu{COLOR['reset']}")
 
         choice = input(f"{COLOR['prompt']}{EMOJI['input']} Enter your choice: {COLOR['reset']}").strip().lower()
@@ -619,6 +813,69 @@ def git_utilities():
                 print_message(f"{EMOJI['success']} Git Push completed.", "success")
             else:
                 print_message(f"{EMOJI['error']} Git Push failed. Ensure your branch is configured to push to an upstream remote.", "error")
+        elif choice == '7': # New: Git Add
+            files_to_add = input(f"{COLOR['prompt']}{EMOJI['input']} Enter files to add (e.g., . or file.txt): {COLOR['reset']}").strip()
+            if files_to_add:
+                add_result = run_command(f"git add {files_to_add}")
+                if add_result is not None:
+                    print_message(f"{EMOJI['success']} Files added successfully.", "success")
+                else:
+                    print_message(f"{EMOJI['error']} Failed to add files.", "error")
+            else:
+                print_message(f"{EMOJI['warning']} Files to add cannot be empty.", "warning")
+        elif choice == '8': # New: Git Commit
+            commit_message = input(f"{COLOR['prompt']}{EMOJI['input']} Enter commit message: {COLOR['reset']}").strip()
+            if commit_message:
+                commit_result = run_command(f"git commit -m \"{commit_message}\"")
+                if commit_result is not None:
+                    print_message(f"{EMOJI['success']} Changes committed successfully.", "success")
+                    print(COLOR['output'] + commit_result + COLOR['reset'])
+                else:
+                    print_message(f"{EMOJI['error']} Failed to commit changes. Are there staged changes?", "error")
+            else:
+                print_message(f"{EMOJI['warning']} Commit message cannot be empty.", "warning")
+        elif choice == '9': # New: Git Clone
+            repo_url = input(f"{COLOR['prompt']}{EMOJI['input']} Enter repository URL to clone: {COLOR['reset']}").strip()
+            if repo_url:
+                clone_result = run_command(f"git clone {repo_url}")
+                if clone_result is not None:
+                    print_message(f"{EMOJI['success']} Repository cloned successfully.", "success")
+                    print(COLOR['output'] + clone_result + COLOR['reset'])
+                else:
+                    print_message(f"{EMOJI['error']} Failed to clone repository.", "error")
+            else:
+                print_message(f"{EMOJI['warning']} Repository URL cannot be empty.", "warning")
+        elif choice == '10': # New: Git Checkout
+            target = input(f"{COLOR['prompt']}{EMOJI['input']} Enter branch name or commit hash to checkout: {COLOR['reset']}").strip()
+            if target:
+                checkout_result = run_command(f"git checkout {target}")
+                if checkout_result is not None:
+                    print_message(f"{EMOJI['success']} Checked out to '{target}' successfully.", "success")
+                    print(COLOR['output'] + checkout_result + COLOR['reset'])
+                else:
+                    print_message(f"{EMOJI['error']} Failed to checkout '{target}'.", "error")
+            else:
+                print_message(f"{EMOJI['warning']} Target cannot be empty.", "warning")
+        elif choice == '11': # New: Git Create Branch
+            branch_name = input(f"{COLOR['prompt']}{EMOJI['input']} Enter new branch name: {COLOR['reset']}").strip()
+            if branch_name:
+                create_branch_result = run_command(f"git branch {branch_name}")
+                if create_branch_result is not None:
+                    print_message(f"{EMOJI['success']} Branch '{branch_name}' created successfully.", "success")
+                else:
+                    print_message(f"{EMOJI['error']} Failed to create branch '{branch_name}'.", "error")
+            else:
+                print_message(f"{EMOJI['warning']} Branch name cannot be empty.", "warning")
+        elif choice == '12': # New: Git Delete Branch
+            branch_name = input(f"{COLOR['prompt']}{EMOJI['input']} Enter branch name to delete (local): {COLOR['reset']}").strip()
+            if branch_name:
+                delete_branch_result = run_command(f"git branch -d {branch_name}")
+                if delete_branch_result is not None:
+                    print_message(f"{EMOJI['success']} Branch '{branch_name}' deleted successfully.", "success")
+                else:
+                    print_message(f"{EMOJI['error']} Failed to delete branch '{branch_name}'.", "error")
+            else:
+                print_message(f"{EMOJI['warning']} Branch name cannot be empty.", "warning")
         elif choice == 'b':
             break
         else:
@@ -635,6 +892,8 @@ def text_processing_tools():
         print(f"{COLOR['menu_option']}4. Base64 Decode{COLOR['reset']}")
         print(f"{COLOR['menu_option']}5. URL Encode{COLOR['reset']}")
         print(f"{COLOR['menu_option']}6. URL Decode{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}7. Get Line/Word/Character Count{COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}8. Validate JSON/YAML (basic){COLOR['reset']}") # New
         print(f"{COLOR['menu_option']}b. Back to Main Menu{COLOR['reset']}")
 
         choice = input(f"{COLOR['prompt']}{EMOJI['input']} Enter your choice: {COLOR['reset']}").strip().lower()
@@ -694,6 +953,38 @@ def text_processing_tools():
                     print_message(f"{EMOJI['error']} Invalid URL encoded string: {e}", "error")
             else:
                 print_message(f"{EMOJI['warning']} Input cannot be empty.", "warning")
+        elif choice == '7': # New: Line/Word/Character Count
+            text_input = input(f"{COLOR['prompt']}{EMOJI['input']} Enter text to count: {COLOR['reset']}").strip()
+            if text_input:
+                lines = text_input.count('\n') + 1 if text_input else 0
+                words = len(text_input.split())
+                chars = len(text_input)
+                print_message(f"{EMOJI['success']} Lines: {lines}, Words: {words}, Characters: {chars}", "success")
+            else:
+                print_message(f"{EMOJI['warning']} Input cannot be empty.", "warning")
+        elif choice == '8': # New: Validate JSON/YAML
+            format_type = input(f"{COLOR['prompt']}{EMOJI['input']} Enter format type to validate (json/yaml): {COLOR['reset']}").strip().lower()
+            text_input = input(f"{COLOR['prompt']}{EMOJI['input']} Paste text to validate: {COLOR['reset']}").strip()
+            if text_input:
+                if format_type == 'json':
+                    try:
+                        json.loads(text_input)
+                        print_message(f"{EMOJI['success']} Valid JSON.", "success")
+                    except json.JSONDecodeError as e:
+                        print_message(f"{EMOJI['error']} Invalid JSON: {e}", "error")
+                elif format_type == 'yaml':
+                    if yaml:
+                        try:
+                            yaml.safe_load(text_input)
+                            print_message(f"{EMOJI['success']} Valid YAML.", "success")
+                        except yaml.YAMLError as e:
+                            print_message(f"{EMOJI['error']} Invalid YAML: {e}", "error")
+                    else:
+                        print_message(f"{EMOJI['warning']} PyYAML not installed. Cannot validate YAML. Please install it: pip install pyyaml", "warning")
+                else:
+                    print_message(f"{EMOJI['warning']} Invalid format type. Choose 'json' or 'yaml'.", "warning")
+            else:
+                print_message(f"{EMOJI['warning']} Input text cannot be empty.", "warning")
         elif choice == 'b':
             break
         else:
@@ -708,6 +999,7 @@ def security_tools():
         print(f"{COLOR['menu_option']}2. Generate SHA256 Hash{COLOR['reset']}")
         print(f"{COLOR['menu_option']}3. Generate Strong Password{COLOR['reset']}")
         print(f"{COLOR['menu_option']}4. Generate UUID{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}5. Generate SSH Key Pair (basic){COLOR['reset']}") # New
         print(f"{COLOR['menu_option']}b. Back to Main Menu{COLOR['reset']}")
 
         choice = input(f"{COLOR['prompt']}{EMOJI['input']} Enter your choice: {COLOR['reset']}").strip().lower()
@@ -741,6 +1033,19 @@ def security_tools():
         elif choice == '4':
             generated_uuid = str(uuid.uuid4())
             print_message(f"\n{EMOJI['success']} Generated UUID:\n{COLOR['output']}{generated_uuid}{COLOR['reset']}", "success")
+        elif choice == '5': # New: Generate SSH Key Pair
+            key_name = input(f"{COLOR['prompt']}{EMOJI['input']} Enter desired key file name (e.g., id_rsa_devops): {COLOR['reset']}").strip()
+            if key_name:
+                ssh_keygen_cmd = f"ssh-keygen -t rsa -b 4096 -f {key_name} -N \"\"" # -N "" for no passphrase
+                keygen_result = run_command(ssh_keygen_cmd)
+                if keygen_result is not None:
+                    print_message(f"{EMOJI['success']} SSH key pair '{key_name}' and '{key_name}.pub' generated successfully.", "success")
+                    print_message(f"{EMOJI['info']} Public key content:\n{COLOR['output']}{run_command(f'cat {key_name}.pub')}{COLOR['reset']}", "info")
+                    print_message(f"{EMOJI['warning']} Private key is saved to '{key_name}'. Keep it secure!", "warning")
+                else:
+                    print_message(f"{EMOJI['error']} Failed to generate SSH key pair. Is 'ssh-keygen' installed?", "error")
+            else:
+                print_message(f"{EMOJI['warning']} Key name cannot be empty.", "warning")
         elif choice == 'b':
             break
         else:
@@ -754,6 +1059,7 @@ def ssl_utilities():
         print(f"\n{COLOR['menu_option']}1. View SSL Certificate Details (from file){COLOR['reset']}")
         print(f"{COLOR['menu_option']}2. Check Website SSL Certificate (basic){COLOR['reset']}")
         print(f"{COLOR['menu_option']}3. Generate Self-Signed SSL Certificate (for testing){COLOR['reset']}")
+        print(f"{COLOR['menu_option']}4. Check Certificate Expiration Date{COLOR['reset']}") # New
         print(f"{COLOR['menu_option']}b. Back to Main Menu{COLOR['reset']}")
 
         choice = input(f"{COLOR['prompt']}{EMOJI['input']} Enter your choice: {COLOR['reset']}").strip().lower()
@@ -815,6 +1121,48 @@ def ssl_utilities():
                     print_message(f"{EMOJI['error']} Failed to generate private key.", "error")
             else:
                 print_message(f"{EMOJI['warning']} Common Name and Days cannot be empty and days must be a number.", "warning")
+        elif choice == '4': # New: Check Certificate Expiration
+            cert_path = input(f"{COLOR['prompt']}{EMOJI['input']} Enter path to certificate file (e.g., cert.pem): {COLOR['reset']}").strip()
+            if cert_path:
+                if os.path.exists(cert_path):
+                    cmd = f"openssl x509 -in {cert_path} -enddate -noout"
+                    expiration_output = run_command(cmd)
+                    if expiration_output:
+                        print_message(f"\n{EMOJI['success']} Expiration Date for '{cert_path}':\n{COLOR['output']}{expiration_output}{COLOR['reset']}", "success")
+                        # Optional: Calculate days remaining
+                        try:
+                            # Extract date string, e.g., "notAfter=Jul  1 12:00:00 2025 GMT"
+                            date_str = expiration_output.split('notAfter=')[1].strip()
+                            # Parse various date formats openssl might output
+                            formats = [
+                                "%b %d %H:%M:%S %Y %Z", # Jul  1 12:00:00 2025 GMT
+                                "%Y%m%d%H%M%SZ",       # 20250701120000Z
+                                "%b %d %H:%M:%S %Y GMT" # Jul 01 12:00:00 2025 GMT (no leading zero for day)
+                            ]
+                            parsed_date = None
+                            for fmt in formats:
+                                try:
+                                    parsed_date = datetime.strptime(date_str, fmt)
+                                    break
+                                except ValueError:
+                                    pass
+
+                            if parsed_date:
+                                days_remaining = (parsed_date - datetime.now()).days
+                                if days_remaining > 0:
+                                    print_message(f"{EMOJI['info']} Days Remaining: {days_remaining}", "info")
+                                else:
+                                    print_message(f"{EMOJI['warning']} Certificate has expired or expires soon!", "warning")
+                            else:
+                                print_message(f"{EMOJI['warning']} Could not parse expiration date format.", "warning")
+                        except Exception as e:
+                            print_message(f"{EMOJI['error']} Error calculating days remaining: {e}", "error")
+                    else:
+                        print_message(f"{EMOJI['error']} Failed to get expiration date. Is OpenSSL installed and the file valid?", "error")
+                else:
+                    print_message(f"{EMOJI['warning']} Certificate file '{cert_path}' not found.", "warning")
+            else:
+                print_message(f"{EMOJI['warning']} Certificate file path cannot be empty.", "warning")
         elif choice == 'b':
             break
         else:
@@ -887,6 +1235,7 @@ def cloud_utilities():
         print(f"{COLOR['menu_option']}4. List Azure Resource Groups (requires Azure CLI configured){COLOR['reset']}")
         print(f"{COLOR['menu_option']}5. Check GCP gcloud CLI presence{COLOR['reset']}")
         print(f"{COLOR['menu_option']}6. List GCP Projects (requires gcloud CLI configured){COLOR['reset']}")
+        print(f"{COLOR['menu_option']}7. Get Current AWS Identity (STS){COLOR['reset']}") # New
         print(f"{COLOR['menu_option']}b. Back to Main Menu{COLOR['reset']}")
 
         choice = input(f"{COLOR['prompt']}{EMOJI['input']} Enter your choice: {COLOR['reset']}").strip().lower()
@@ -927,6 +1276,12 @@ def cloud_utilities():
                 print_message(f"\n{EMOJI['success']} GCP Projects:\n{COLOR['output']}{gcloud_projects}{COLOR['reset']}", "success")
             else:
                 print_message(f"{EMOJI['error']} Failed to list GCP Projects. Ensure gcloud CLI is installed and authenticated.", "error")
+        elif choice == '7': # New: Get Current AWS Identity
+            aws_identity = run_command("aws sts get-caller-identity", check=False)
+            if aws_identity:
+                print_message(f"\n{EMOJI['success']} Current AWS Identity:\n{COLOR['output']}{aws_identity}{COLOR['reset']}", "success")
+            else:
+                print_message(f"{EMOJI['error']} Failed to get AWS identity. Ensure AWS CLI is configured.", "error")
         elif choice == 'b':
             break
         else:
@@ -939,6 +1294,8 @@ def monitoring_logging_tools():
     while True:
         print(f"\n{COLOR['menu_option']}1. View System Logs (tail -f /var/log/syslog or Windows Event Logs){COLOR['reset']}")
         print(f"{COLOR['menu_option']}2. Check Service Status{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}3. View Top CPU/Memory Processes (snapshot){COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}4. View Specific Log File (tail){COLOR['reset']}") # New
         print(f"{COLOR['menu_option']}b. Back to Main Menu{COLOR['reset']}")
 
         choice = input(f"{COLOR['prompt']}{EMOJI['input']} Enter your choice: {COLOR['reset']}").strip().lower()
@@ -979,6 +1336,33 @@ def monitoring_logging_tools():
                     print_message(f"{EMOJI['error']} Failed to retrieve status for '{service_name}'. Service might not exist or command failed.", "error")
             else:
                 print_message(f"{EMOJI['warning']} Service name cannot be empty.", "warning")
+        elif choice == '3': # New: View Top CPU/Memory Processes
+            print_message(f"\n{EMOJI['info']} Viewing Top CPU/Memory Processes (snapshot):", "info")
+            if platform.system() in ["Linux", "Darwin"]:
+                top_cmd = "ps aux --sort=-%cpu | head -n 10" # Top 10 by CPU
+            elif platform.system() == "Windows":
+                top_cmd = "powershell -command \"Get-Process | Sort-Object CPU -Descending | Select-Object -First 10 -Property ProcessName, CPU, WorkingSet | Format-Table -AutoSize\""
+            else:
+                print_message("Top processes not supported on this OS.", "error")
+                continue
+            top_output = run_command(top_cmd)
+            print(COLOR['output'] + (top_output if top_output else "Failed to retrieve top processes.") + COLOR['reset'])
+            print_message(f"{EMOJI['success']} Top processes snapshot displayed.", "success")
+        elif choice == '4': # New: View Specific Log File
+            log_file_path = input(f"{COLOR['prompt']}{EMOJI['input']} Enter path to log file to view (e.g., /var/log/auth.log): {COLOR['reset']}").strip()
+            if log_file_path:
+                if os.path.exists(log_file_path):
+                    print_message(f"Tailing last 20 lines of {log_file_path}. Press Ctrl+C to stop.", "info")
+                    if platform.system() in ["Linux", "Darwin"]:
+                        run_command(f"tail -n 20 {log_file_path}", capture_output=False, check=False)
+                    elif platform.system() == "Windows":
+                        # Get-Content -Tail for Windows, but more complex for interactive tail -f
+                        run_command(f"powershell -command \"Get-Content -Path '{log_file_path}' -Tail 20\"", capture_output=False, check=False)
+                    print_message(f"{EMOJI['success']} Log file view completed.", "success")
+                else:
+                    print_message(f"{EMOJI['warning']} Log file '{log_file_path}' not found.", "warning")
+            else:
+                print_message(f"{EMOJI['warning']} Log file path cannot be empty.", "warning")
         elif choice == 'b':
             break
         else:
@@ -994,6 +1378,8 @@ def package_management_tools():
         print(f"\n{COLOR['menu_option']}1. Update Package Lists{COLOR['reset']}")
         print(f"{COLOR['menu_option']}2. Install a Package{COLOR['reset']}")
         print(f"{COLOR['menu_option']}3. Remove a Package{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}4. Search for a Package{COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}5. List Installed Packages{COLOR['reset']}") # New
         print(f"{COLOR['menu_option']}b. Back to Main Menu{COLOR['reset']}")
 
         choice = input(f"{COLOR['prompt']}{EMOJI['input']} Enter your choice: {COLOR['reset']}").strip().lower()
@@ -1078,6 +1464,58 @@ def package_management_tools():
                     print_message(f"{EMOJI['error']} Failed to remove package '{package_name}'.", "error")
             else:
                 print_message(f"{EMOJI['warning']} Package name cannot be empty.", "warning")
+        elif choice == '4': # New: Search for a Package
+            search_term = input(f"{COLOR['prompt']}{EMOJI['input']} Enter package search term: {COLOR['reset']}").strip()
+            if search_term:
+                print_message(f"\n{EMOJI['loading']} Searching for package '{search_term}'...", "info")
+                if platform.system() == "Linux":
+                    if run_command("which apt", check=False):
+                        search_cmd = f"apt search {search_term}"
+                    elif run_command("which yum", check=False):
+                        search_cmd = f"yum search {search_term}"
+                    else:
+                        print_message(f"{EMOJI['error']} No common Linux package manager (apt/yum) found.", "error")
+                        continue
+                elif platform.system() == "Darwin":
+                    search_cmd = f"brew search {search_term}"
+                elif platform.system() == "Windows":
+                    search_cmd = f"choco search {search_term}"
+                else:
+                    print_message("Package search not supported on this OS.", "error")
+                    continue
+                
+                search_result = run_command(search_cmd)
+                if search_result is not None:
+                    print(COLOR['output'] + search_result + COLOR['reset'])
+                    print_message(f"{EMOJI['success']} Package search completed.", "success")
+                else:
+                    print_message(f"{EMOJI['error']} Failed to search for package '{search_term}'.", "error")
+            else:
+                print_message(f"{EMOJI['warning']} Search term cannot be empty.", "warning")
+        elif choice == '5': # New: List Installed Packages
+            print_message(f"\n{EMOJI['info']} Listing installed packages...", "info")
+            if platform.system() == "Linux":
+                if run_command("which apt", check=False):
+                    list_cmd = "apt list --installed"
+                elif run_command("which yum", check=False):
+                    list_cmd = "yum list installed"
+                else:
+                    print_message(f"{EMOJI['error']} No common Linux package manager (apt/yum) found.", "error")
+                    continue
+            elif platform.system() == "Darwin":
+                list_cmd = "brew list"
+            elif platform.system() == "Windows":
+                list_cmd = "choco list --localonly"
+            else:
+                print_message("Listing installed packages not supported on this OS.", "error")
+                continue
+            
+            list_result = run_command(list_cmd)
+            if list_result is not None:
+                print(COLOR['output'] + list_result + COLOR['reset'])
+                print_message(f"{EMOJI['success']} Installed packages listed.", "success")
+            else:
+                print_message(f"{EMOJI['error']} Failed to list installed packages.", "error")
         elif choice == 'b':
             break
         else:
@@ -1091,6 +1529,8 @@ def configuration_management_tools():
         print(f"\n{COLOR['menu_option']}1. View All Environment Variables{COLOR['reset']}")
         print(f"{COLOR['menu_option']}2. Get Specific Environment Variable Value{COLOR['reset']}")
         print(f"{COLOR['menu_option']}3. Set Temporary Environment Variable (current session){COLOR['reset']}")
+        print(f"{COLOR['menu_option']}4. Backup a File/Directory{COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}5. Restore a File/Directory from Backup{COLOR['reset']}") # New
         print(f"{COLOR['menu_option']}b. Back to Main Menu{COLOR['reset']}")
 
         choice = input(f"{COLOR['prompt']}{EMOJI['input']} Enter your choice: {COLOR['reset']}").strip().lower()
@@ -1119,6 +1559,57 @@ def configuration_management_tools():
                 print_message(f"{EMOJI['info']} Note: This change is temporary and only affects the current terminal session.", "info")
             else:
                 print_message(f"{EMOJI['warning']} Variable name cannot be empty.", "warning")
+        elif choice == '4': # New: Backup File/Directory
+            source_path = input(f"{COLOR['prompt']}{EMOJI['input']} Enter source file/directory path to backup: {COLOR['reset']}").strip()
+            backup_path = input(f"{COLOR['prompt']}{EMOJI['input']} Enter destination backup path (e.g., /tmp/backup/): {COLOR['reset']}").strip()
+            if source_path and backup_path:
+                if os.path.exists(source_path):
+                    try:
+                        # Ensure backup directory exists
+                        os.makedirs(backup_path, exist_ok=True)
+                        # Simple copy for backup. For directories, use shutil.copytree (more advanced)
+                        if os.path.isfile(source_path):
+                            dest_file = os.path.join(backup_path, os.path.basename(source_path))
+                            import shutil
+                            shutil.copy2(source_path, dest_file)
+                            print_message(f"{EMOJI['success']} File '{source_path}' backed up to '{dest_file}' successfully.", "success")
+                        elif os.path.isdir(source_path):
+                            dest_dir = os.path.join(backup_path, os.path.basename(source_path))
+                            import shutil
+                            shutil.copytree(source_path, dest_dir, dirs_exist_ok=True)
+                            print_message(f"{EMOJI['success']} Directory '{source_path}' backed up to '{dest_dir}' successfully.", "success")
+                        else:
+                            print_message(f"{EMOJI['warning']} Source path is neither a file nor a directory.", "warning")
+                    except Exception as e:
+                        print_message(f"{EMOJI['error']} Error during backup: {e}", "error")
+                else:
+                    print_message(f"{EMOJI['warning']} Source path '{source_path}' not found.", "warning")
+            else:
+                print_message(f"{EMOJI['warning']} Source and backup paths cannot be empty.", "warning")
+        elif choice == '5': # New: Restore File/Directory
+            backup_source_path = input(f"{COLOR['prompt']}{EMOJI['input']} Enter backup file/directory path to restore from: {COLOR['reset']}").strip()
+            restore_dest_path = input(f"{COLOR['prompt']}{EMOJI['input']} Enter original destination path to restore to: {COLOR['reset']}").strip()
+            if backup_source_path and restore_dest_path:
+                if os.path.exists(backup_source_path):
+                    try:
+                        import shutil
+                        if os.path.isfile(backup_source_path):
+                            shutil.copy2(backup_source_path, restore_dest_path)
+                            print_message(f"{EMOJI['success']} File '{backup_source_path}' restored to '{restore_dest_path}' successfully.", "success")
+                        elif os.path.isdir(backup_source_path):
+                            # Remove existing destination if it's a directory to avoid errors, then copy
+                            if os.path.exists(restore_dest_path) and os.path.isdir(restore_dest_path):
+                                shutil.rmtree(restore_dest_path)
+                            shutil.copytree(backup_source_path, restore_dest_path)
+                            print_message(f"{EMOJI['success']} Directory '{backup_source_path}' restored to '{restore_dest_path}' successfully.", "success")
+                        else:
+                            print_message(f"{EMOJI['warning']} Backup source is neither a file nor a directory.", "warning")
+                    except Exception as e:
+                        print_message(f"{EMOJI['error']} Error during restore: {e}", "error")
+                else:
+                    print_message(f"{EMOJI['warning']} Backup source path '{backup_source_path}' not found.", "warning")
+            else:
+                print_message(f"{EMOJI['warning']} Backup source and restore destination paths cannot be empty.", "warning")
         elif choice == 'b':
             break
         else:
@@ -1131,6 +1622,7 @@ def automation_scheduling_tools():
     while True:
         print(f"\n{COLOR['menu_option']}1. List Scheduled Tasks (Cron/Windows Scheduler){COLOR['reset']}")
         print(f"{COLOR['menu_option']}2. Execute a Custom Shell Command/Script{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}3. Run Command After Delay{COLOR['reset']}") # New
         print(f"{COLOR['menu_option']}b. Back to Main Menu{COLOR['reset']}")
 
         choice = input(f"{COLOR['prompt']}{EMOJI['input']} Enter your choice: {COLOR['reset']}").strip().lower()
@@ -1177,6 +1669,24 @@ def automation_scheduling_tools():
                     print_message(f"{EMOJI['error']} Custom command execution failed.", "error")
             else:
                 print_message(f"{EMOJI['warning']} Command cannot be empty.", "warning")
+        elif choice == '3': # New: Run Command After Delay
+            command_to_delay = input(f"{COLOR['prompt']}{EMOJI['input']} Enter command to execute: {COLOR['reset']}").strip()
+            delay_seconds = input(f"{COLOR['prompt']}{EMOJI['input']} Enter delay in seconds: {COLOR['reset']}").strip()
+            if command_to_delay and delay_seconds.isdigit():
+                print_message(f"{EMOJI['info']} Command '{command_to_delay}' will execute in {delay_seconds} seconds.", "info")
+                # This uses a non-blocking approach by spawning a new process
+                if platform.system() in ["Linux", "Darwin"]:
+                    # Using 'nohup' and '&' to run in background, 'sleep' for delay
+                    subprocess.Popen(f"nohup sh -c 'sleep {delay_seconds}; {command_to_delay}' > /dev/null 2>&1 &", shell=True)
+                elif platform.system() == "Windows":
+                    # Using 'start' and 'timeout' for background execution with delay
+                    subprocess.Popen(f"start /B cmd /c \"timeout /t {delay_seconds} /nobreak >NUL && {command_to_delay}\"", shell=True)
+                else:
+                    print_message("Delayed command execution not supported on this OS.", "error")
+                    continue
+                print_message(f"{EMOJI['success']} Command scheduled for delayed execution.", "success")
+            else:
+                print_message(f"{EMOJI['warning']} Command and valid delay (in seconds) are required.", "warning")
         elif choice == 'b':
             break
         else:
@@ -1191,6 +1701,11 @@ def development_utilities():
         print(f"{COLOR['menu_option']}2. Check Node.js Version{COLOR['reset']}")
         print(f"{COLOR['menu_option']}3. Check Java Version{COLOR['reset']}")
         print(f"{COLOR['menu_option']}4. Run npm install (in current directory){COLOR['reset']}")
+        print(f"{COLOR['menu_option']}5. Check Go Version{COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}6. Check Rust Version{COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}7. Check PHP Version{COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}8. Create Python Virtual Environment{COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}9. Install Python Requirements (pip install -r){COLOR['reset']}") # New
         print(f"{COLOR['menu_option']}b. Back to Main Menu{COLOR['reset']}")
 
         choice = input(f"{COLOR['prompt']}{EMOJI['input']} Enter your choice: {COLOR['reset']}").strip().lower()
@@ -1220,6 +1735,46 @@ def development_utilities():
                 print_message(f"{EMOJI['success']} npm install completed. Output:\n{COLOR['output']}{npm_install_result}{COLOR['reset']}", "success")
             else:
                 print_message(f"{EMOJI['error']} npm install failed. Check if Node.js and npm are installed, and if package.json exists.", "error")
+        elif choice == '5': # New: Check Go Version
+            go_version = run_command("go version", check=False)
+            if go_version:
+                print_message(f"{EMOJI['success']} Go Version: {COLOR['output']}{go_version}{COLOR['reset']}", "success")
+            else:
+                print_message(f"{EMOJI['error']} Go not found or command failed.", "error")
+        elif choice == '6': # New: Check Rust Version
+            rust_version = run_command("rustc --version", check=False)
+            if rust_version:
+                print_message(f"{EMOJI['success']} Rust Version: {COLOR['output']}{rust_version}{COLOR['reset']}", "success")
+            else:
+                print_message(f"{EMOJI['error']} Rust not found or command failed.", "error")
+        elif choice == '7': # New: Check PHP Version
+            php_version = run_command("php -v", check=False)
+            if php_version:
+                print_message(f"{EMOJI['success']} PHP Version:\n{COLOR['output']}{php_version}{COLOR['reset']}", "success")
+            else:
+                print_message(f"{EMOJI['error']} PHP not found or command failed.", "error")
+        elif choice == '8': # New: Create Python Virtual Environment
+            env_name = input(f"{COLOR['prompt']}{EMOJI['input']} Enter virtual environment name (e.g., venv): {COLOR['reset']}").strip()
+            if env_name:
+                venv_result = run_command(f"python -m venv {env_name}")
+                if venv_result is not None:
+                    print_message(f"{EMOJI['success']} Virtual environment '{env_name}' created successfully.", "success")
+                    print_message(f"{EMOJI['info']} To activate: source {env_name}/bin/activate (Linux/macOS) or .\\{env_name}\\Scripts\\activate (Windows)", "info")
+                else:
+                    print_message(f"{EMOJI['error']} Failed to create virtual environment.", "error")
+            else:
+                print_message(f"{EMOJI['warning']} Virtual environment name cannot be empty.", "warning")
+        elif choice == '9': # New: Install Python Requirements
+            req_file = input(f"{COLOR['prompt']}{EMOJI['input']} Enter requirements file path (default: requirements.txt): {COLOR['reset']}").strip() or "requirements.txt"
+            if os.path.exists(req_file):
+                pip_install_result = run_command(f"pip install -r {req_file}")
+                if pip_install_result is not None:
+                    print_message(f"{EMOJI['success']} Requirements from '{req_file}' installed successfully.", "success")
+                    print(COLOR['output'] + pip_install_result + COLOR['reset'])
+                else:
+                    print_message(f"{EMOJI['error']} Failed to install requirements. Check file and virtual environment activation.", "error")
+            else:
+                print_message(f"{EMOJI['warning']} Requirements file '{req_file}' not found.", "warning")
         elif choice == 'b':
             break
         else:
@@ -1240,6 +1795,10 @@ def kubernetes_utilities():
         print(f"\n{COLOR['menu_option']}1. List Pods{COLOR['reset']}")
         print(f"{COLOR['menu_option']}2. List Deployments{COLOR['reset']}")
         print(f"{COLOR['menu_option']}3. Get Pod Details by Name{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}4. Get Services{COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}5. Get Nodes{COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}6. Get Pod Logs by Name{COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}7. Execute Command in Pod{COLOR['reset']}") # New
         print(f"{COLOR['menu_option']}b. Back to Main Menu{COLOR['reset']}")
 
         choice = input(f"{COLOR['prompt']}{EMOJI['input']} Enter your choice: {COLOR['reset']}").strip().lower()
@@ -1263,22 +1822,60 @@ def kubernetes_utilities():
                 print_message(f"{EMOJI['success']} Pod details displayed.", "success")
             else:
                 print_message(f"{EMOJI['warning']} Pod name cannot be empty.", "warning")
+        elif choice == '4': # New: Get Services
+            print_message(f"\n{EMOJI['info']} Listing Services...", "info")
+            services = run_command("kubectl get services")
+            print(COLOR['output'] + (services if services else "No services found or kubectl command failed.") + COLOR['reset'])
+            print_message(f"{EMOJI['success']} Services listed.", "success")
+        elif choice == '5': # New: Get Nodes
+            print_message(f"\n{EMOJI['info']} Listing Nodes...", "info")
+            nodes = run_command("kubectl get nodes")
+            print(COLOR['output'] + (nodes if nodes else "No nodes found or kubectl command failed.") + COLOR['reset'])
+            print_message(f"{EMOJI['success']} Nodes listed.", "success")
+        elif choice == '6': # New: Get Pod Logs
+            pod_name = input(f"{COLOR['prompt']}{EMOJI['input']} Enter Pod name to get logs from: {COLOR['reset']}").strip()
+            if pod_name:
+                pod_logs = run_command(f"kubectl logs {pod_name}")
+                print(COLOR['output'] + (pod_logs if pod_logs else f"No logs found for pod '{pod_name}' or command failed.") + COLOR['reset'])
+                print_message(f"{EMOJI['success']} Pod logs displayed.", "success")
+            else:
+                print_message(f"{EMOJI['warning']} Pod name cannot be empty.", "warning")
+        elif choice == '7': # New: Execute Command in Pod
+            pod_name = input(f"{COLOR['prompt']}{EMOJI['input']} Enter Pod name to execute command in: {COLOR['reset']}").strip()
+            container_name = input(f"{COLOR['prompt']}{EMOJI['input']} Enter container name (optional, if multiple in pod): {COLOR['reset']}").strip()
+            exec_command = input(f"{COLOR['prompt']}{EMOJI['input']} Enter command to execute (e.g., ls -l): {COLOR['reset']}").strip()
+            if pod_name and exec_command:
+                exec_cmd = f"kubectl exec {pod_name}"
+                if container_name:
+                    exec_cmd += f" -c {container_name}"
+                exec_cmd += f" -- {exec_command}"
+                
+                exec_result = run_command(exec_cmd)
+                if exec_result is not None:
+                    print_message(f"{EMOJI['success']} Command executed in pod '{pod_name}'. Output:\n{COLOR['output']}{exec_result}{COLOR['reset']}", "success")
+                else:
+                    print_message(f"{EMOJI['error']} Failed to execute command in pod '{pod_name}'.", "error")
+            else:
+                print_message(f"{EMOJI['warning']} Pod name and command cannot be empty.", "warning")
         elif choice == 'b':
             break
         else:
             print_message(f"{EMOJI['warning']} Invalid choice. Please try again.", "warning")
 
 def web_server_utilities():
-    """Provides basic web server utilities."""
+    """Provides web server utilities."""
     print_header(f"{EMOJI['web']} Web Server Utilities")
     print_message(f"{EMOJI['info']} This section includes checks for common web servers (Nginx/Apache) on Linux/macOS and general HTTP checks.", "info")
 
     while True:
         print(f"\n{COLOR['menu_option']}1. Check Nginx/Apache Status (Linux/macOS){COLOR['reset']}")
         print(f"{COLOR['menu_option']}2. Get HTTP Response Headers (curl -I){COLOR['reset']}")
-        print(f"{COLOR['menu_option']}3. Check if Port is Listening Locally (netstat){COLOR['reset']}") # New
-        print(f"{COLOR['menu_option']}4. View Web Server Config File (Linux/macOS){COLOR['reset']}") # New
-        print(f"{COLOR['menu_option']}5. Test URL for Redirects (curl){COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}3. Check if Port is Listening Locally (netstat){COLOR['reset']}")
+        print(f"{COLOR['menu_option']}4. View Web Server Config File (Linux/macOS){COLOR['reset']}")
+        print(f"{COLOR['menu_option']}5. Test URL for Redirects (curl){COLOR['reset']}")
+        print(f"{COLOR['menu_option']}6. View Web Server Access Log (Linux/macOS){COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}7. View Web Server Error Log (Linux/macOS){COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}8. Reload/Restart Web Server (Linux/macOS){COLOR['reset']}") # New
         print(f"{COLOR['menu_option']}b. Back to Main Menu{COLOR['reset']}")
 
         choice = input(f"{COLOR['prompt']}{EMOJI['input']} Enter your choice: {COLOR['reset']}").strip().lower()
@@ -1312,7 +1909,7 @@ def web_server_utilities():
                 print_message(f"{EMOJI['success']} HTTP header check completed.", "success")
             else:
                 print_message(f"{EMOJI['warning']} URL cannot be empty.", "warning")
-        elif choice == '3': # New: Check if Port is Listening Locally
+        elif choice == '3': # Check if Port is Listening Locally
             port = input(f"{COLOR['prompt']}{EMOJI['input']} Enter port to check for local listening (e.g., 80, 443, 8080): {COLOR['reset']}").strip()
             if port.isdigit():
                 if platform.system() in ["Linux", "Darwin"]:
@@ -1330,7 +1927,7 @@ def web_server_utilities():
                     print_message(f"{EMOJI['warning']} Port {port} does not appear to be listening locally.", "warning")
             else:
                 print_message(f"{EMOJI['warning']} Invalid port. Please enter a number.", "warning")
-        elif choice == '4': # New: View Web Server Config File
+        elif choice == '4': # View Web Server Config File
             if platform.system() in ["Linux", "Darwin"]:
                 config_path = input(f"{COLOR['prompt']}{EMOJI['input']} Enter path to web server config (e.g., /etc/nginx/nginx.conf, /etc/apache2/apache2.conf): {COLOR['reset']}").strip()
                 if config_path:
@@ -1346,7 +1943,7 @@ def web_server_utilities():
                     print_message(f"{EMOJI['warning']} Config file path cannot be empty.", "warning")
             else:
                 print_message(f"{EMOJI['warning']} This option is primarily for Linux/macOS systems.", "warning")
-        elif choice == '5': # New: Test URL for Redirects
+        elif choice == '5': # Test URL for Redirects
             url = input(f"{COLOR['prompt']}{EMOJI['input']} Enter URL to test for redirects (e.g., http://old-site.com): {COLOR['reset']}").strip()
             if url:
                 # Use -L to follow redirects, -v for verbose output including headers, --stderr - to redirect stderr to stdout
@@ -1357,6 +1954,130 @@ def web_server_utilities():
                     print_message(f"{EMOJI['info']} No redirects found or failed to connect for {url}.", "info")
             else:
                 print_message(f"{EMOJI['warning']} URL cannot be empty.", "warning")
+        elif choice == '6': # New: View Web Server Access Log
+            if platform.system() in ["Linux", "Darwin"]:
+                log_path = input(f"{COLOR['prompt']}{EMOJI['input']} Enter path to web server access log (e.g., /var/log/nginx/access.log): {COLOR['reset']}").strip()
+                if log_path:
+                    if os.path.exists(log_path):
+                        print_message(f"Tailing last 20 lines of access log '{log_path}'. Press Ctrl+C to stop.", "info")
+                        run_command(f"tail -n 20 {log_path}", capture_output=False, check=False)
+                        print_message(f"{EMOJI['success']} Access log view completed.", "success")
+                    else:
+                        print_message(f"{EMOJI['warning']} Access log file '{log_path}' not found.", "warning")
+                else:
+                    print_message(f"{EMOJI['warning']} Log file path cannot be empty.", "warning")
+            else:
+                print_message(f"{EMOJI['warning']} This option is primarily for Linux/macOS systems.", "warning")
+        elif choice == '7': # New: View Web Server Error Log
+            if platform.system() in ["Linux", "Darwin"]:
+                log_path = input(f"{COLOR['prompt']}{EMOJI['input']} Enter path to web server error log (e.g., /var/log/nginx/error.log): {COLOR['reset']}").strip()
+                if log_path:
+                    if os.path.exists(log_path):
+                        print_message(f"Tailing last 20 lines of error log '{log_path}'. Press Ctrl+C to stop.", "info")
+                        run_command(f"tail -n 20 {log_path}", capture_output=False, check=False)
+                        print_message(f"{EMOJI['success']} Error log view completed.", "success")
+                    else:
+                        print_message(f"{EMOJI['warning']} Error log file '{log_path}' not found.", "warning")
+                else:
+                    print_message(f"{EMOJI['warning']} Log file path cannot be empty.", "warning")
+            else:
+                print_message(f"{EMOJI['warning']} This option is primarily for Linux/macOS systems.", "warning")
+        elif choice == '8': # New: Reload/Restart Web Server
+            if platform.system() in ["Linux", "Darwin"]:
+                server_type = input(f"{COLOR['prompt']}{EMOJI['input']} Enter web server type (nginx/apache2): {COLOR['reset']}").strip().lower()
+                action = input(f"{COLOR['prompt']}{EMOJI['input']} Enter action (reload/restart): {COLOR['reset']}").strip().lower()
+                if server_type in ['nginx', 'apache2'] and action in ['reload', 'restart']:
+                    service_cmd = f"sudo systemctl {action} {server_type}"
+                    print_message(f"{EMOJI['loading']} Attempting to {action} {server_type}...", "info")
+                    action_result = run_command(service_cmd)
+                    if action_result is not None:
+                        print_message(f"{EMOJI['success']} {server_type} {action}ed successfully.", "success")
+                    else:
+                        print_message(f"{EMOJI['error']} Failed to {action} {server_type}. Check permissions (sudo) and service name.", "error")
+                else:
+                    print_message(f"{EMOJI['warning']} Invalid server type or action. Choose 'nginx'/'apache2' and 'reload'/'restart'.", "warning")
+            else:
+                print_message(f"{EMOJI['warning']} This option is primarily for Linux/macOS systems.", "warning")
+        elif choice == 'b':
+            break
+        else:
+            print_message(f"{EMOJI['warning']} Invalid choice. Please try again.", "warning")
+
+def database_utilities():
+    """Provides basic database utilities."""
+    print_header(f"{EMOJI['database']} Database Utilities")
+    print_message(f"{EMOJI['info']} This section provides basic checks for database client tools.", "info")
+    print_message(f"{EMOJI['info']} Full functionality requires respective client CLIs (mysql, psql, sqlcmd) to be installed and configured.", "info")
+
+    while True:
+        print(f"\n{COLOR['menu_option']}1. Check MySQL Client presence{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}2. Check PostgreSQL Client presence{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}3. Check SQL Server Client (sqlcmd) presence{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}b. Back to Main Menu{COLOR['reset']}")
+
+        choice = input(f"{COLOR['prompt']}{EMOJI['input']} Enter your choice: {COLOR['reset']}").strip().lower()
+
+        if choice == '1':
+            mysql_path = run_command("which mysql" if platform.system() != "Windows" else "where mysql", check=False)
+            if mysql_path:
+                print_message(f"{EMOJI['success']} MySQL client found at: {mysql_path}", "success")
+            else:
+                print_message(f"{EMOJI['error']} MySQL client not found. Please install it.", "error")
+        elif choice == '2':
+            psql_path = run_command("which psql" if platform.system() != "Windows" else "where psql", check=False)
+            if psql_path:
+                print_message(f"{EMOJI['success']} PostgreSQL client (psql) found at: {psql_path}", "success")
+            else:
+                print_message(f"{EMOJI['error']} PostgreSQL client (psql) not found. Please install it.", "error")
+        elif choice == '3':
+            sqlcmd_path = run_command("which sqlcmd" if platform.system() != "Windows" else "where sqlcmd", check=False)
+            if sqlcmd_path:
+                print_message(f"{EMOJI['success']} SQL Server client (sqlcmd) found at: {sqlcmd_path}", "success")
+            else:
+                print_message(f"{EMOJI['error']} SQL Server client (sqlcmd) not found. Please install it.", "error")
+        elif choice == 'b':
+            break
+        else:
+            print_message(f"{EMOJI['warning']} Invalid choice. Please try again.", "warning")
+
+def virtualization_utilities():
+    """Provides basic local virtualization utilities."""
+    print_header(f"{EMOJI['virtualization']} Virtualization Utilities (Local)")
+    print_message(f"{EMOJI['info']} This section provides basic checks for local virtualization tools (VirtualBox, Vagrant).", "info")
+
+    while True:
+        print(f"\n{COLOR['menu_option']}1. Check VirtualBox presence{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}2. List VirtualBox VMs{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}3. Check Vagrant presence{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}4. List Vagrant VMs (in current directory){COLOR['reset']}")
+        print(f"{COLOR['menu_option']}b. Back to Main Menu{COLOR['reset']}")
+
+        choice = input(f"{COLOR['prompt']}{EMOJI['input']} Enter your choice: {COLOR['reset']}").strip().lower()
+
+        if choice == '1':
+            vbox_path = run_command("which VBoxManage" if platform.system() != "Windows" else "where VBoxManage", check=False)
+            if vbox_path:
+                print_message(f"{EMOJI['success']} VirtualBox (VBoxManage) found at: {vbox_path}", "success")
+            else:
+                print_message(f"{EMOJI['error']} VirtualBox (VBoxManage) not found. Please install it.", "error")
+        elif choice == '2':
+            vms = run_command("VBoxManage list vms", check=False)
+            if vms:
+                print_message(f"\n{EMOJI['success']} VirtualBox VMs:\n{COLOR['output']}{vms}{COLOR['reset']}", "success")
+            else:
+                print_message(f"{EMOJI['error']} Failed to list VirtualBox VMs. Is VirtualBox installed and running?", "error")
+        elif choice == '3':
+            vagrant_path = run_command("which vagrant" if platform.system() != "Windows" else "where vagrant", check=False)
+            if vagrant_path:
+                print_message(f"{EMOJI['success']} Vagrant found at: {vagrant_path}", "success")
+            else:
+                print_message(f"{EMOJI['error']} Vagrant not found. Please install it.", "error")
+        elif choice == '4':
+            vagrant_status = run_command("vagrant status", check=False)
+            if vagrant_status:
+                print_message(f"\n{EMOJI['success']} Vagrant VMs (in current directory):\n{COLOR['output']}{vagrant_status}{COLOR['reset']}", "success")
+            else:
+                print_message(f"{EMOJI['error']} No Vagrant VMs found in current directory or Vagrant command failed.", "error")
         elif choice == 'b':
             break
         else:
@@ -1380,10 +2101,13 @@ def windows_specific_tools():
         print(f"{COLOR['menu_option']}7. Flush DNS Cache{COLOR['reset']}")
         print(f"{COLOR['menu_option']}8. View Installed Programs (PowerShell){COLOR['reset']}")
         print(f"{COLOR['menu_option']}9. View System Uptime{COLOR['reset']}")
-        print(f"{COLOR['menu_option']}10. {EMOJI['firewall']} Manage Windows Firewall Rules (List/Add/Delete){COLOR['reset']}") # New
-        print(f"{COLOR['menu_option']}11. {EMOJI['disk']} Check Disk Health (chkdsk){COLOR['reset']}") # New
-        print(f"{COLOR['menu_option']}12. {EMOJI['share']} List Network Shares{COLOR['reset']}") # New
-        print(f"{COLOR['menu_option']}13. View Detailed Process Info (wmic){COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}10. {EMOJI['firewall']} Manage Windows Firewall Rules{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}11. {EMOJI['disk']} Check Disk Health (chkdsk){COLOR['reset']}")
+        print(f"{COLOR['menu_option']}12. {EMOJI['share']} List Network Shares{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}13. View Detailed Process Info (wmic){COLOR['reset']}")
+        print(f"{COLOR['menu_option']}14. List Local Groups{COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}15. Check Windows Update Status{COLOR['reset']}") # New
+        print(f"{COLOR['menu_option']}16. View Disk Space Usage{COLOR['reset']}") # New
         print(f"{COLOR['menu_option']}b. Back to Main Menu{COLOR['reset']}")
 
         choice = input(f"{COLOR['prompt']}{EMOJI['input']} Enter your choice: {COLOR['reset']}").strip().lower()
@@ -1415,7 +2139,7 @@ def windows_specific_tools():
                     print_message(f"{EMOJI['error']} Failed to stop service '{service_name}'. Check service name and permissions.", "error")
             else:
                 print_message(f"{EMOJI['warning']} Service name cannot be empty.", "warning")
-        elif choice == '4': # New Restart Service
+        elif choice == '4': # Restart Service
             service_name = input(f"{COLOR['prompt']}{EMOJI['input']} Enter service name to RESTART: {COLOR['reset']}").strip()
             if service_name:
                 restart_result = run_command(f"powershell -command \"Restart-Service -Name '{service_name}' -PassThru\"")
@@ -1436,7 +2160,7 @@ def windows_specific_tools():
             local_users = run_command("net user")
             print(COLOR['output'] + (local_users if local_users else "Failed to list local users.") + COLOR['reset'])
             print_message(f"{EMOJI['success']} Local users displayed.", "success")
-        elif choice == '7': # New Flush DNS
+        elif choice == '7': # Flush DNS
             print_message(f"\n{EMOJI['info']} Flushing DNS Cache...", "info")
             flush_result = run_command("ipconfig /flushdns")
             if flush_result is not None:
@@ -1444,28 +2168,30 @@ def windows_specific_tools():
                 print(COLOR['output'] + flush_result + COLOR['reset'])
             else:
                 print_message(f"{EMOJI['error']} Failed to flush DNS cache.", "error")
-        elif choice == '8': # New View Installed Programs
+        elif choice == '8': # View Installed Programs
             print_message(f"\n{EMOJI['info']} Viewing Installed Programs (Get-Package):", "info")
             installed_programs = run_command("powershell -command \"Get-Package | Format-Table Name, Version -AutoSize\"")
             print(COLOR['output'] + (installed_programs if installed_programs else "Failed to retrieve installed programs.") + COLOR['reset'])
             print_message(f"{EMOJI['success']} Installed programs displayed.", "success")
-        elif choice == '9': # New View System Uptime
+        elif choice == '9': # View System Uptime
             print_message(f"\n{EMOJI['info']} Viewing System Uptime:", "info")
             uptime_info = run_command("powershell -command \"(Get-CimInstance -ClassName Win32_OperatingSystem).LastBootUpTime\"")
             if uptime_info:
                 # Convert to datetime object for easier calculation
                 try:
-                    boot_time_str = uptime_info.split('.')[0] # Remove milliseconds
-                    boot_time = datetime.strptime(boot_time_str, '%Y%m%d%H%M%S')
+                    # Example: 20250702084530.000000-420
+                    # Extract date string, e.g., "20250702084530"
+                    boot_time_str_raw = uptime_info.split('.')[0]
+                    boot_time = datetime.strptime(boot_time_str_raw, '%Y%m%d%H%M%S')
                     current_time = datetime.now()
                     uptime_duration = current_time - boot_time
-                    print_message(f"\n{EMOJI['success']} Last Boot Up Time: {COLOR['output']}{boot_time}{COLOR['reset']}", "success")
+                    print_message(f"\n{EMOJI['success']} Last Boot Up Time: {COLOR['output']}{boot_time.strftime('%Y-%m-%d %H:%M:%S')}{COLOR['reset']}", "success")
                     print_message(f"{EMOJI['success']} System Uptime: {COLOR['output']}{uptime_duration}{COLOR['reset']}", "success")
-                except ValueError:
-                    print_message(f"{EMOJI['warning']} Could not parse uptime information: {uptime_info}", "warning")
+                except ValueError as e:
+                    print_message(f"{EMOJI['warning']} Could not parse uptime information: {e} - Raw: {uptime_info}", "warning")
             else:
                 print_message(f"{EMOJI['error']} Failed to retrieve system uptime.", "error")
-        elif choice == '10': # New: Manage Windows Firewall Rules
+        elif choice == '10': # Manage Windows Firewall Rules
             print_header(f"{EMOJI['firewall']} Windows Firewall Management")
             while True:
                 print(f"\n{COLOR['menu_option']}1. List Firewall Rules{COLOR['reset']}")
@@ -1506,7 +2232,7 @@ def windows_specific_tools():
                     break
                 else:
                     print_message(f"{EMOJI['warning']} Invalid choice. Please try again.", "warning")
-        elif choice == '11': # New: Check Disk Health
+        elif choice == '11': # Check Disk Health
             drive_letter = input(f"{COLOR['prompt']}{EMOJI['input']} Enter drive letter to check (e.g., C:): {COLOR['reset']}").strip().upper()
             if drive_letter and drive_letter.endswith(':'):
                 print_message(f"\n{EMOJI['info']} Checking disk health for {drive_letter} (chkdsk)...", "info")
@@ -1516,17 +2242,42 @@ def windows_specific_tools():
                 print_message(f"{EMOJI['success']} Chkdsk initiated for {drive_letter}. Check console output for details.", "success")
             else:
                 print_message(f"{EMOJI['warning']} Invalid drive letter. Please enter in format like 'C:'.", "warning")
-        elif choice == '12': # New: List Network Shares
+        elif choice == '12': # List Network Shares
             print_message(f"\n{EMOJI['info']} Listing Network Shares (net share):", "info")
             shares = run_command("net share")
             print(COLOR['output'] + (shares if shares else "No network shares found or command failed.") + COLOR['reset'])
             print_message(f"{EMOJI['success']} Network shares listed.", "success")
-        elif choice == '13': # New: View Detailed Process Info
+        elif choice == '13': # View Detailed Process Info
             print_message(f"\n{EMOJI['info']} Viewing Detailed Process Information (wmic process get):", "info")
             # Common useful properties: Name, ProcessId, CommandLine, ExecutablePath, WorkingSetSize, ThreadCount
             process_info = run_command("wmic process get Name,ProcessId,CommandLine,ExecutablePath,WorkingSetSize,ThreadCount /format:list")
             print(COLOR['output'] + (process_info if process_info else "Failed to retrieve detailed process info.") + COLOR['reset'])
             print_message(f"{EMOJI['success']} Detailed process information displayed.", "success")
+        elif choice == '14': # New: List Local Groups
+            print_message(f"\n{EMOJI['info']} Listing Local Groups (net localgroup):", "info")
+            groups = run_command("net localgroup")
+            print(COLOR['output'] + (groups if groups else "Failed to list local groups.") + COLOR['reset'])
+            print_message(f"{EMOJI['success']} Local groups displayed.", "success")
+        elif choice == '15': # New: Check Windows Update Status
+            print_message(f"\n{EMOJI['info']} Checking Windows Update Status (PowerShell):", "info")
+            # This command might take a moment to run
+            update_status = run_command("powershell -command \"(New-Object -ComObject 'Microsoft.Update.AutoUpdate').ServiceEnabled\"")
+            if update_status:
+                print_message(f"\n{EMOJI['success']} Windows Update Service Enabled: {COLOR['output']}{update_status}{COLOR['reset']}", "success")
+                # More detailed check: last successful update
+                last_update = run_command("powershell -command \"(Get-WmiObject -Class Win32_QuickFixEngineering | Sort-Object InstalledOn -Descending | Select-Object -First 1 InstalledOn, Description) | Format-List\"")
+                if last_update:
+                    print_message(f"{EMOJI['info']} Last Installed Update:\n{COLOR['output']}{last_update}{COLOR['reset']}", "info")
+                else:
+                    print_message(f"{EMOJI['warning']} Could not retrieve last installed update details.", "warning")
+            else:
+                print_message(f"{EMOJI['error']} Failed to check Windows Update status.", "error")
+            print_message(f"{EMOJI['success']} Windows Update status check completed.", "success")
+        elif choice == '16': # New: View Disk Space Usage
+            print_message(f"\n{EMOJI['info']} Viewing Disk Space Usage (Get-WmiObject Win32_LogicalDisk):", "info")
+            disk_usage = run_command("powershell -command \"Get-WmiObject Win32_LogicalDisk | Select-Object DeviceID, @{Name='Size(GB)';Expression={$_.Size / 1GB -as [int]}}, @{Name='Free(GB)';Expression={$_.FreeSpace / 1GB -as [int]}} | Format-Table -AutoSize\"")
+            print(COLOR['output'] + (disk_usage if disk_usage else "Failed to retrieve disk space usage.") + COLOR['reset'])
+            print_message(f"{EMOJI['success']} Disk space usage displayed.", "success")
         elif choice == 'b':
             break
         else:
@@ -1555,8 +2306,10 @@ def display_main_menu():
     print(f"{COLOR['menu_option']}16. {EMOJI['dev']} Development Utilities{COLOR['reset']}")
     print(f"{COLOR['menu_option']}17. {EMOJI['kubernetes']} Kubernetes Utilities{COLOR['reset']}")
     print(f"{COLOR['menu_option']}18. {EMOJI['web']} Web Server Utilities{COLOR['reset']}")
-    print(f"{COLOR['menu_option']}19. {EMOJI['windows']} Windows Specific Tools{COLOR['reset']}")
-    print(f"{COLOR['menu_option']}20. {EMOJI['exit']} Exit{COLOR['reset']}")
+    print(f"{COLOR['menu_option']}19. {EMOJI['database']} Database Utilities{COLOR['reset']}") # New Category
+    print(f"{COLOR['menu_option']}20. {EMOJI['virtualization']} Virtualization Utilities (Local){COLOR['reset']}") # New Category
+    print(f"{COLOR['menu_option']}21. {EMOJI['windows']} Windows Specific Tools{COLOR['reset']}") # Updated option number
+    print(f"{COLOR['menu_option']}22. {EMOJI['exit']} Exit{COLOR['reset']}") # Updated Exit option number
     print(f"{COLOR['header']}{EMOJI['separator'] * 3}{COLOR['reset']}")
 
 def main():
@@ -1604,19 +2357,22 @@ def main():
             kubernetes_utilities()
         elif choice == '18':
             web_server_utilities()
-        elif choice == '19':
+        elif choice == '19': # New option number
+            database_utilities()
+        elif choice == '20': # New option number
+            virtualization_utilities()
+        elif choice == '21': # Updated option number
             windows_specific_tools()
-        elif choice == '20':
+        elif choice == '22': # Updated Exit option number
             print_message(f"{EMOJI['exit']} Exiting {APP_NAME}. Goodbye! {EMOJI['exit']}", "info")
             break
         else:
             print_message(f"{EMOJI['warning']} Invalid choice. Please select a valid option from the menu.", "warning")
         
         # Pause before showing menu again, unless exiting
-        if choice != '20':
+        if choice != '22':
             input(f"{COLOR['prompt']}{EMOJI['input']} Press Enter to continue...{COLOR['reset']}")
             os.system('cls' if os.name == 'nt' else 'clear') # Clear screen for better readability
 
 if __name__ == "__main__":
     main()
-    
