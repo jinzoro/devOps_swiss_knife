@@ -2,31 +2,36 @@
 
 # **DevOps Swiss Army Knife 🛠️**
 
-## **Version: 1.4.0**
+## **Version: 2.0.0**
 
-A versatile, terminal-based toolbox designed for DevOps engineers and systems administrators. This script consolidates a wide array of common system, network, file, container, Git, text processing, security, SSL/TLS, encryption, cloud, monitoring, package management, configuration, automation, and development utilities into a single, easy-to-use menu-driven interface. It also includes specific tools tailored for Windows environments.
+A versatile, terminal-based toolbox designed for DevOps engineers and systems administrators. This script consolidates a wide array of common system, network, file, container, Git, text processing, security, SSL/TLS, encryption, cloud, monitoring, package management, configuration, automation, development, and infrastructure utilities into a single, easy-to-use menu-driven interface. It also includes specific tools tailored for Windows environments.
 
 The goal is to provide a comprehensive "Swiss Army Knife" for daily operational tasks, featuring clear organization, vibrant colors, and helpful emojis for an enhanced user experience.
 
 ## **✨ Features**
 
-* **💻 System Information:** Get quick insights into your OS, CPU, memory, disk usage, and network interfaces.  
-* **⚙️ Process Management:** List running processes and kill them by PID.  
-* **🌐 Network Utilities:** Ping hosts, check open ports, trace routes, perform DNS lookups, view network connections, and make basic HTTP GET requests.  
-* **📁 File Operations:** Find files, search for text within files (grep), list directory trees, create directories, delete files, and view file content.  
-* **🐳 Container Utilities (Docker):** Manage Docker info, list containers and images, stop/remove containers, pull images, run simple containers, and view container logs.  
-* **🌳 Git Utilities:** Check repository status, view commit logs, list branches, show staged diffs, pull, and push changes.  
-* **📝 Text Processing Tools:** Format JSON and YAML, Base64 encode/decode, and URL encode/decode strings.  
-* **🔒 Security Tools:** Generate MD5/SHA256 hashes, create strong passwords, and generate UUIDs.  
-* **🔐 SSL/TLS Utilities:** View certificate details from files, check website SSL certificates, and generate self-signed certificates for testing.  
-* **🔑 Encryption/Decryption Tools (Basic):** Perform simple XOR-based text encryption and decryption (for demonstration/obfuscation only, **not for sensitive data**).  
-* **☁️ Cloud Utilities (Basic CLI):** Check for the presence of AWS, Azure, and GCP CLIs, and run basic commands like listing S3 buckets, Azure Resource Groups, and GCP Projects.  
-* **📊 Monitoring & Logging Tools:** View system logs (syslog/event logs) and check service statuses.  
-* **📦 Package Management Tools:** Update package lists, install, and remove packages using common OS-specific managers (apt, yum, brew, choco).  
-* **🔧 Configuration Management Tools:** View, get, and set environment variables for the current session.  
-* **🤖 Automation & Scheduling Tools:** List scheduled tasks (cron jobs/Windows Task Scheduler) and execute custom shell commands or scripts.  
-* **🧑‍💻 Development Utilities:** Quickly check versions of Python, Node.js, and Java, and run npm install.  
-* **🪟 Windows Specific Tools:** A dedicated section with tools specific to Windows environments, including listing/managing services, viewing network adapters, and listing local users. (This menu option is only active when run on Windows).
+* **💻 System Information:** Get quick insights into your OS, CPU, memory, disk usage, inode usage, network interfaces, uptime, and logged-in users.
+* **⚙️ Process Management:** List running processes, kill by PID, find processes by name, and view process trees.
+* **🌐 Network Utilities:** Ping hosts, check/scan port ranges, trace routes, DNS lookups, HTTP GET/POST requests, Whois, Dig, routing table, ARP cache.
+* **📁 File Operations:** Find files, grep text, directory tree, create/delete directories and files, view content, calculate MD5/SHA256 checksums, zip/unzip, and chmod.
+* **🐳 Container Utilities (Docker):** Full container lifecycle (start/stop/restart/remove/exec/logs), pull/inspect images, Docker Compose (up/down/status), system prune.
+* **🌳 Git Utilities:** Status, log, branches, diff, pull, push, add, commit, clone, checkout, stash (list/save/pop), tags, branch create/delete.
+* **📝 Text Processing Tools:** Format/validate JSON and YAML, Base64/URL encode-decode, line/word/char count, JSON↔YAML conversion, string case converter.
+* **🔒 Security Tools:** MD5/SHA256 hashing, cryptographically-secure password generation (via `secrets`), UUID generation, SSH key generation, SSH connection test, ssh-copy-id, UFW firewall management.
+* **🔐 SSL/TLS Utilities:** View certificate details, check website SSL certs, generate self-signed certificates, check certificate expiration.
+* **🔑 Encryption/Decryption Tools (Basic):** Simple XOR-based encryption/decryption (for demonstration only, **not for sensitive data**).
+* **☁️ Cloud Utilities (Basic CLI):** AWS, Azure, and GCP CLI checks and basic commands (S3 buckets, Resource Groups, Projects, AWS identity).
+* **📊 Monitoring & Logging Tools:** View system/custom log files, check service statuses, top CPU/memory processes snapshot.
+* **📦 Package Management Tools:** Update, install, remove, search packages, and list installed packages (apt/yum/brew/choco).
+* **🔧 Configuration Management Tools:** View/get/set environment variables, backup and restore files/directories.
+* **🤖 Automation & Scheduling Tools:** List cron jobs, execute custom commands, run with delay, add/remove crontab entries.
+* **🧑‍💻 Development Utilities:** Check versions (Python, Node.js, Java, Go, Rust, PHP), npm install, create Python venvs, install requirements.
+* **☸️ Kubernetes Utilities:** List pods/deployments/services/nodes, describe pods, view logs, exec into pods.
+* **🕸️ Web Server Utilities:** Check Nginx/Apache status, HTTP response headers, local port listening, config viewer, redirect testing, access/error log tailing, reload/restart.
+* **🗄️ Database Utilities:** Check MySQL/PostgreSQL/SQL Server clients, run MySQL/PostgreSQL queries interactively, Redis CLI check and ping.
+* **🖥️ Virtualization Utilities:** VirtualBox and Vagrant presence checks and VM listing.
+* **🏗️ Terraform Utilities:** Full workflow — init, validate, plan, apply, destroy, show state, outputs, workspace management (with safety confirmations for destructive ops).
+* **🪟 Windows Specific Tools:** Services, network adapters, local users/groups, DNS flush, installed programs, uptime, firewall rules, disk health, network shares, detailed process info, Windows Update status, disk space.
 
 ## **🚀 Setup and Installation**
 
