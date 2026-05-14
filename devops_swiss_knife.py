@@ -12,6 +12,9 @@ from datetime import datetime, timedelta # Added timedelta for uptime calculatio
 import urllib.parse # For URL encoding/decoding
 import secrets
 import shutil
+import getpass
+import ipaddress
+import time as _time
 
 # --- Third-party libraries (install if not present) ---
 # For colors: pip install colorama
@@ -2283,82 +2286,515 @@ def web_server_utilities():
         else:
             print_message(f"{EMOJI['warning']} Invalid choice. Please try again.", "warning")
 
-def database_utilities():
-    """Provides basic database utilities."""
-    print_header(f"{EMOJI['database']} Database Utilities")
-    print_message(f"{EMOJI['info']} This section provides basic checks for database client tools.", "info")
-    print_message(f"{EMOJI['info']} Full functionality requires respective client CLIs (mysql, psql, sqlcmd) to be installed and configured.", "info")
+def _run_db_cmd(cmd, env=None):
+    """Run a database CLI command, returning stdout or None on failure."""
+    try:
+        result = subprocess.run(
+            cmd, shell=True, capture_output=True, text=True,
+            env=env, encoding='utf-8', errors='replace'
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+        if result.stderr:
+            print_message(f"DB Error: {result.stderr.strip()[:300]}", "error")
+        return None
+    except Exception as e:
+        print_message(f"Error: {e}", "error")
+        return None
+
+
+def _mysql_tools():
+    if not run_command("which mysql" if platform.system() != "Windows" else "where mysql", check=False):
+        print_message("MySQL client not found. Install: sudo apt install mysql-client", "error")
+        return
+    print_header("🐬 MySQL / MariaDB Management")
+    host = input(f"{COLOR['prompt']}{EMOJI['input']} Host (default: 127.0.0.1): {COLOR['reset']}").strip() or "127.0.0.1"
+    port = input(f"{COLOR['prompt']}{EMOJI['input']} Port (default: 3306): {COLOR['reset']}").strip() or "3306"
+    user = input(f"{COLOR['prompt']}{EMOJI['input']} User: {COLOR['reset']}").strip()
+    password = getpass.getpass("Password (leave blank for none): ")
+
+    def mysql_exec(query, db="", extra=""):
+        env = os.environ.copy()
+        if password:
+            env['MYSQL_PWD'] = password
+        db_arg = db if db else ""
+        cmd = f'mysql -h {host} -P {port} -u {user} {db_arg} {extra} -e "{query}"'
+        return _run_db_cmd(cmd, env=env)
 
     while True:
-        print(f"\n{COLOR['menu_option']}1. Check MySQL Client presence{COLOR['reset']}")
-        print(f"{COLOR['menu_option']}2. Check PostgreSQL Client presence{COLOR['reset']}")
-        print(f"{COLOR['menu_option']}3. Check SQL Server Client (sqlcmd) presence{COLOR['reset']}")
-        print(f"{COLOR['menu_option']}4. Run MySQL Query{COLOR['reset']}")
-        print(f"{COLOR['menu_option']}5. Run PostgreSQL Query{COLOR['reset']}")
-        print(f"{COLOR['menu_option']}6. Check Redis CLI presence & ping{COLOR['reset']}")
+        print(f"\n{COLOR['menu_option']}1.  Test Connection{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}2.  List Databases{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}3.  List Tables{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}4.  Describe Table{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}5.  Run Custom Query{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}6.  Show Processlist{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}7.  Kill Query by ID{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}8.  Show Database Sizes{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}9.  Export Database (mysqldump){COLOR['reset']}")
+        print(f"{COLOR['menu_option']}10. Import SQL File{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}11. Show Slow Queries{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}12. Replication Status{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}13. Show Server Variables{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}b.  Back{COLOR['reset']}")
+        ch = input(f"{COLOR['prompt']}{EMOJI['input']} Enter choice: {COLOR['reset']}").strip().lower()
+        if ch == '1':
+            r = mysql_exec("SELECT VERSION() AS version, NOW() AS current_time, USER() AS current_user")
+            if r is not None:
+                print(COLOR['output'] + r + COLOR['reset'])
+                print_message("Connection successful.", "success")
+        elif ch == '2':
+            r = mysql_exec("SHOW DATABASES")
+            if r: print(COLOR['output'] + r + COLOR['reset'])
+        elif ch == '3':
+            db = input(f"{COLOR['prompt']}{EMOJI['input']} Database name: {COLOR['reset']}").strip()
+            if db:
+                r = mysql_exec("SHOW TABLES", db=db)
+                if r: print(COLOR['output'] + r + COLOR['reset'])
+        elif ch == '4':
+            db = input(f"{COLOR['prompt']}{EMOJI['input']} Database name: {COLOR['reset']}").strip()
+            table = input(f"{COLOR['prompt']}{EMOJI['input']} Table name: {COLOR['reset']}").strip()
+            if db and table:
+                r = mysql_exec(f"DESCRIBE {table}", db=db)
+                if r: print(COLOR['output'] + r + COLOR['reset'])
+        elif ch == '5':
+            db = input(f"{COLOR['prompt']}{EMOJI['input']} Database (leave blank for none): {COLOR['reset']}").strip()
+            query = input(f"{COLOR['prompt']}{EMOJI['input']} SQL query: {COLOR['reset']}").strip()
+            if query:
+                r = mysql_exec(query, db=db)
+                if r is not None:
+                    print(COLOR['output'] + (r if r else "(no output)") + COLOR['reset'])
+        elif ch == '6':
+            r = mysql_exec("SHOW FULL PROCESSLIST")
+            if r: print(COLOR['output'] + r + COLOR['reset'])
+        elif ch == '7':
+            pid = input(f"{COLOR['prompt']}{EMOJI['input']} Query ID to kill: {COLOR['reset']}").strip()
+            if pid.isdigit():
+                r = mysql_exec(f"KILL QUERY {pid}")
+                if r is not None:
+                    print_message(f"Query {pid} killed.", "success")
+        elif ch == '8':
+            r = mysql_exec("SELECT table_schema AS 'Database', ROUND(SUM(data_length+index_length)/1024/1024,2) AS 'Size_MB' FROM information_schema.tables GROUP BY table_schema ORDER BY SUM(data_length+index_length) DESC")
+            if r: print(COLOR['output'] + r + COLOR['reset'])
+        elif ch == '9':
+            db = input(f"{COLOR['prompt']}{EMOJI['input']} Database to export: {COLOR['reset']}").strip()
+            outfile = input(f"{COLOR['prompt']}{EMOJI['input']} Output file (default: {db}_backup.sql): {COLOR['reset']}").strip() or f"{db}_backup.sql"
+            if db:
+                env = os.environ.copy()
+                if password: env['MYSQL_PWD'] = password
+                try:
+                    with open(outfile, 'w') as f:
+                        r = subprocess.run(f"mysqldump -h {host} -P {port} -u {user} {db}", shell=True, stdout=f, stderr=subprocess.PIPE, text=True, env=env)
+                    if r.returncode == 0:
+                        print_message(f"Exported '{db}' to '{outfile}'.", "success")
+                    else:
+                        print_message(f"Export failed: {r.stderr.strip()[:300]}", "error")
+                except Exception as e:
+                    print_message(f"Export error: {e}", "error")
+        elif ch == '10':
+            db = input(f"{COLOR['prompt']}{EMOJI['input']} Target database: {COLOR['reset']}").strip()
+            sqlfile = input(f"{COLOR['prompt']}{EMOJI['input']} SQL file path: {COLOR['reset']}").strip()
+            if db and sqlfile and os.path.exists(sqlfile):
+                env = os.environ.copy()
+                if password: env['MYSQL_PWD'] = password
+                try:
+                    with open(sqlfile, 'r') as f:
+                        r = subprocess.run(f"mysql -h {host} -P {port} -u {user} {db}", shell=True, stdin=f, capture_output=True, text=True, env=env)
+                    if r.returncode == 0:
+                        print_message(f"Imported '{sqlfile}' into '{db}'.", "success")
+                    else:
+                        print_message(f"Import failed: {r.stderr.strip()[:300]}", "error")
+                except Exception as e:
+                    print_message(f"Import error: {e}", "error")
+            else:
+                print_message("Valid database name and existing file path required.", "warning")
+        elif ch == '11':
+            r = mysql_exec("SELECT query_time, sql_text FROM mysql.slow_log ORDER BY query_time DESC LIMIT 10")
+            if r:
+                print(COLOR['output'] + r + COLOR['reset'])
+            else:
+                print_message("Slow query log may not be enabled. Check slow_query_log variable.", "info")
+        elif ch == '12':
+            r = mysql_exec("SHOW SLAVE STATUS") or mysql_exec("SHOW REPLICA STATUS")
+            if r:
+                print(COLOR['output'] + r + COLOR['reset'])
+            else:
+                print_message("No replication configured or not a replica.", "info")
+        elif ch == '13':
+            term = input(f"{COLOR['prompt']}{EMOJI['input']} Filter term (leave blank for global status): {COLOR['reset']}").strip()
+            r = mysql_exec(f"SHOW VARIABLES LIKE '%{term}%'") if term else mysql_exec("SHOW GLOBAL STATUS LIMIT 30")
+            if r: print(COLOR['output'] + r + COLOR['reset'])
+        elif ch == 'b':
+            break
+        else:
+            print_message("Invalid choice.", "warning")
+
+
+def _postgres_tools():
+    if not run_command("which psql" if platform.system() != "Windows" else "where psql", check=False):
+        print_message("psql not found. Install: sudo apt install postgresql-client", "error")
+        return
+    print_header("🐘 PostgreSQL Management")
+    host = input(f"{COLOR['prompt']}{EMOJI['input']} Host (default: 127.0.0.1): {COLOR['reset']}").strip() or "127.0.0.1"
+    port = input(f"{COLOR['prompt']}{EMOJI['input']} Port (default: 5432): {COLOR['reset']}").strip() or "5432"
+    user = input(f"{COLOR['prompt']}{EMOJI['input']} User: {COLOR['reset']}").strip()
+    password = getpass.getpass("Password (leave blank for none): ")
+
+    def psql_exec(query, db="postgres"):
+        env = os.environ.copy()
+        if password: env['PGPASSWORD'] = password
+        cmd = f'psql -h {host} -p {port} -U {user} -d {db} -c "{query}"'
+        return _run_db_cmd(cmd, env=env)
+
+    while True:
+        print(f"\n{COLOR['menu_option']}1.  Test Connection{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}2.  List Databases{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}3.  List Tables{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}4.  Describe Table{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}5.  Run Custom Query{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}6.  Active Connections{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}7.  Kill Connection by PID{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}8.  Database Sizes{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}9.  Export Database (pg_dump){COLOR['reset']}")
+        print(f"{COLOR['menu_option']}10. Import SQL File{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}11. Vacuum Analyze{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}12. Show Settings{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}13. List Extensions{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}b.  Back{COLOR['reset']}")
+        ch = input(f"{COLOR['prompt']}{EMOJI['input']} Enter choice: {COLOR['reset']}").strip().lower()
+        if ch == '1':
+            r = psql_exec("SELECT version(), current_user, current_database(), now()")
+            if r is not None:
+                print(COLOR['output'] + r + COLOR['reset'])
+                print_message("Connection successful.", "success")
+        elif ch == '2':
+            r = psql_exec("SELECT datname, pg_size_pretty(pg_database_size(datname)) AS size FROM pg_database ORDER BY pg_database_size(datname) DESC")
+            if r: print(COLOR['output'] + r + COLOR['reset'])
+        elif ch == '3':
+            db = input(f"{COLOR['prompt']}{EMOJI['input']} Database name: {COLOR['reset']}").strip() or "postgres"
+            r = psql_exec("SELECT schemaname, tablename, tableowner FROM pg_tables WHERE schemaname NOT IN ('pg_catalog','information_schema') ORDER BY schemaname, tablename", db=db)
+            if r: print(COLOR['output'] + r + COLOR['reset'])
+        elif ch == '4':
+            db = input(f"{COLOR['prompt']}{EMOJI['input']} Database name: {COLOR['reset']}").strip() or "postgres"
+            table = input(f"{COLOR['prompt']}{EMOJI['input']} Table name: {COLOR['reset']}").strip()
+            if table:
+                r = psql_exec(f"SELECT column_name, data_type, character_maximum_length, is_nullable FROM information_schema.columns WHERE table_name='{table}' ORDER BY ordinal_position", db=db)
+                if r: print(COLOR['output'] + r + COLOR['reset'])
+        elif ch == '5':
+            db = input(f"{COLOR['prompt']}{EMOJI['input']} Database (default: postgres): {COLOR['reset']}").strip() or "postgres"
+            query = input(f"{COLOR['prompt']}{EMOJI['input']} SQL query: {COLOR['reset']}").strip()
+            if query:
+                r = psql_exec(query, db=db)
+                if r is not None:
+                    print(COLOR['output'] + (r if r else "(no output)") + COLOR['reset'])
+        elif ch == '6':
+            r = psql_exec("SELECT pid, usename, application_name, client_addr, state, query_start, LEFT(query,80) AS query FROM pg_stat_activity WHERE state != 'idle' ORDER BY query_start")
+            if r: print(COLOR['output'] + r + COLOR['reset'])
+        elif ch == '7':
+            pid = input(f"{COLOR['prompt']}{EMOJI['input']} Connection PID to terminate: {COLOR['reset']}").strip()
+            if pid.isdigit():
+                r = psql_exec(f"SELECT pg_terminate_backend({pid})")
+                if r is not None:
+                    print_message(f"Connection {pid} terminated.", "success")
+        elif ch == '8':
+            r = psql_exec("SELECT datname, pg_size_pretty(pg_database_size(datname)) AS size FROM pg_database ORDER BY pg_database_size(datname) DESC")
+            if r: print(COLOR['output'] + r + COLOR['reset'])
+        elif ch == '9':
+            db = input(f"{COLOR['prompt']}{EMOJI['input']} Database to export: {COLOR['reset']}").strip()
+            outfile = input(f"{COLOR['prompt']}{EMOJI['input']} Output file (default: {db}_backup.sql): {COLOR['reset']}").strip() or f"{db}_backup.sql"
+            if db:
+                env = os.environ.copy()
+                if password: env['PGPASSWORD'] = password
+                try:
+                    with open(outfile, 'w') as f:
+                        r = subprocess.run(f"pg_dump -h {host} -p {port} -U {user} {db}", shell=True, stdout=f, stderr=subprocess.PIPE, text=True, env=env)
+                    if r.returncode == 0:
+                        print_message(f"Exported '{db}' to '{outfile}'.", "success")
+                    else:
+                        print_message(f"Export failed: {r.stderr.strip()[:300]}", "error")
+                except Exception as e:
+                    print_message(f"Export error: {e}", "error")
+        elif ch == '10':
+            db = input(f"{COLOR['prompt']}{EMOJI['input']} Target database (default: postgres): {COLOR['reset']}").strip() or "postgres"
+            sqlfile = input(f"{COLOR['prompt']}{EMOJI['input']} SQL file path: {COLOR['reset']}").strip()
+            if sqlfile and os.path.exists(sqlfile):
+                env = os.environ.copy()
+                if password: env['PGPASSWORD'] = password
+                try:
+                    with open(sqlfile, 'r') as f:
+                        r = subprocess.run(f"psql -h {host} -p {port} -U {user} -d {db}", shell=True, stdin=f, capture_output=True, text=True, env=env)
+                    if r.returncode == 0:
+                        print_message(f"Imported '{sqlfile}' into '{db}'.", "success")
+                    else:
+                        print_message(f"Import failed: {r.stderr.strip()[:300]}", "error")
+                except Exception as e:
+                    print_message(f"Import error: {e}", "error")
+            else:
+                print_message("Valid file path required.", "warning")
+        elif ch == '11':
+            db = input(f"{COLOR['prompt']}{EMOJI['input']} Database (default: postgres): {COLOR['reset']}").strip() or "postgres"
+            psql_exec("VACUUM ANALYZE", db=db)
+            print_message(f"VACUUM ANALYZE completed on '{db}'.", "success")
+        elif ch == '12':
+            term = input(f"{COLOR['prompt']}{EMOJI['input']} Filter setting name (leave blank for non-defaults): {COLOR['reset']}").strip()
+            if term:
+                r = psql_exec(f"SELECT name, setting, unit, short_desc FROM pg_settings WHERE name LIKE '%{term}%' ORDER BY name")
+            else:
+                r = psql_exec("SELECT name, setting, unit FROM pg_settings WHERE source != 'default' ORDER BY name LIMIT 30")
+            if r: print(COLOR['output'] + r + COLOR['reset'])
+        elif ch == '13':
+            db = input(f"{COLOR['prompt']}{EMOJI['input']} Database (default: postgres): {COLOR['reset']}").strip() or "postgres"
+            r = psql_exec("SELECT name, default_version, installed_version FROM pg_available_extensions WHERE installed_version IS NOT NULL ORDER BY name", db=db)
+            if r: print(COLOR['output'] + r + COLOR['reset'])
+        elif ch == 'b':
+            break
+        else:
+            print_message("Invalid choice.", "warning")
+
+
+def _redis_tools():
+    if not run_command("which redis-cli" if platform.system() != "Windows" else "where redis-cli", check=False):
+        print_message("redis-cli not found. Install: sudo apt install redis-tools", "error")
+        return
+    print_header("🔴 Redis Management")
+    host = input(f"{COLOR['prompt']}{EMOJI['input']} Host (default: 127.0.0.1): {COLOR['reset']}").strip() or "127.0.0.1"
+    port = input(f"{COLOR['prompt']}{EMOJI['input']} Port (default: 6379): {COLOR['reset']}").strip() or "6379"
+    password = getpass.getpass("Password (leave blank for none): ")
+
+    def redis_cmd(args):
+        auth = f"-a '{password}'" if password else ""
+        return run_command(f"redis-cli -h {host} -p {port} {auth} {args}", check=False)
+
+    while True:
+        print(f"\n{COLOR['menu_option']}1.  Test Connection (PING){COLOR['reset']}")
+        print(f"{COLOR['menu_option']}2.  Server Info{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}3.  List Keys (pattern){COLOR['reset']}")
+        print(f"{COLOR['menu_option']}4.  Get Key Value{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}5.  Set Key{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}6.  Delete Key{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}7.  Key Type & TTL{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}8.  Database Size (DBSIZE){COLOR['reset']}")
+        print(f"{COLOR['menu_option']}9.  Memory Info{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}10. Slow Log{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}11. Flush Current DB (FLUSHDB){COLOR['reset']}")
+        print(f"{COLOR['menu_option']}b.  Back{COLOR['reset']}")
+        ch = input(f"{COLOR['prompt']}{EMOJI['input']} Enter choice: {COLOR['reset']}").strip().lower()
+        if ch == '1':
+            r = redis_cmd("PING")
+            if r and "PONG" in r:
+                print_message(f"Redis at {host}:{port} is responding (PONG).", "success")
+            else:
+                print_message("Redis not responding. Check host/port/auth.", "error")
+        elif ch == '2':
+            section = input(f"{COLOR['prompt']}{EMOJI['input']} Section (server/clients/memory/stats/all, default: server): {COLOR['reset']}").strip() or "server"
+            r = redis_cmd(f"INFO {section}")
+            if r: print(COLOR['output'] + r + COLOR['reset'])
+        elif ch == '3':
+            pattern = input(f"{COLOR['prompt']}{EMOJI['input']} Key pattern (default: *): {COLOR['reset']}").strip() or "*"
+            r = redis_cmd(f"KEYS {pattern}")
+            if r:
+                keys = r.splitlines()
+                print_message(f"Found {len(keys)} key(s):", "info")
+                print(COLOR['output'] + r + COLOR['reset'])
+            else:
+                print_message("No keys found.", "info")
+        elif ch == '4':
+            key = input(f"{COLOR['prompt']}{EMOJI['input']} Key name: {COLOR['reset']}").strip()
+            if key:
+                r = redis_cmd(f"GET {key}")
+                print(COLOR['output'] + (r if r is not None else "(nil)") + COLOR['reset'])
+        elif ch == '5':
+            key = input(f"{COLOR['prompt']}{EMOJI['input']} Key name: {COLOR['reset']}").strip()
+            value = input(f"{COLOR['prompt']}{EMOJI['input']} Value: {COLOR['reset']}").strip()
+            ttl = input(f"{COLOR['prompt']}{EMOJI['input']} TTL seconds (leave blank for no expiry): {COLOR['reset']}").strip()
+            if key:
+                cmd_str = f"SET {key} '{value}' EX {ttl}" if (ttl and ttl.isdigit()) else f"SET {key} '{value}'"
+                r = redis_cmd(cmd_str)
+                if r: print_message(f"Key '{key}' set.", "success")
+        elif ch == '6':
+            key = input(f"{COLOR['prompt']}{EMOJI['input']} Key name to delete: {COLOR['reset']}").strip()
+            if key:
+                r = redis_cmd(f"DEL {key}")
+                print_message(f"Deleted {r or 0} key(s).", "success")
+        elif ch == '7':
+            key = input(f"{COLOR['prompt']}{EMOJI['input']} Key name: {COLOR['reset']}").strip()
+            if key:
+                ktype = redis_cmd(f"TYPE {key}")
+                kttl = redis_cmd(f"TTL {key}")
+                kenc = redis_cmd(f"OBJECT ENCODING {key}")
+                print_message(f"Type: {ktype or 'N/A'}", "info")
+                print_message(f"TTL:  {kttl or 'N/A'} (-1=no expiry, -2=not found)", "info")
+                print_message(f"Encoding: {kenc or 'N/A'}", "info")
+        elif ch == '8':
+            r = redis_cmd("DBSIZE")
+            print_message(f"Database size: {r or 0} key(s).", "info")
+        elif ch == '9':
+            r = redis_cmd("INFO memory")
+            if r: print(COLOR['output'] + r + COLOR['reset'])
+        elif ch == '10':
+            r = redis_cmd("SLOWLOG GET 10")
+            if r:
+                print(COLOR['output'] + r + COLOR['reset'])
+            else:
+                print_message("Slow log is empty.", "info")
+        elif ch == '11':
+            confirm = input(f"{COLOR['warning']}{EMOJI['warning']} This deletes ALL keys in the current DB! Type 'yes' to confirm: {COLOR['reset']}").strip().lower()
+            if confirm == 'yes':
+                redis_cmd("FLUSHDB")
+                print_message("Database flushed.", "success")
+            else:
+                print_message("Cancelled.", "info")
+        elif ch == 'b':
+            break
+        else:
+            print_message("Invalid choice.", "warning")
+
+
+def _mongodb_tools():
+    tool = "mongosh" if run_command("which mongosh", check=False) else ("mongo" if run_command("which mongo", check=False) else None)
+    if not tool:
+        print_message("MongoDB shell not found (tried mongosh, mongo).", "error")
+        return
+    print_header("🍃 MongoDB Management")
+    host = input(f"{COLOR['prompt']}{EMOJI['input']} Host (default: localhost): {COLOR['reset']}").strip() or "localhost"
+    port = input(f"{COLOR['prompt']}{EMOJI['input']} Port (default: 27017): {COLOR['reset']}").strip() or "27017"
+    user = input(f"{COLOR['prompt']}{EMOJI['input']} User (leave blank if no auth): {COLOR['reset']}").strip()
+    password = getpass.getpass("Password: ") if user else ""
+
+    def mongo_exec(js, db="admin"):
+        auth = f"--username {user} --password '{password}'" if user else ""
+        cmd = f'{tool} --host {host} --port {port} {auth} {db} --eval "{js}" --quiet'
+        return run_command(cmd, check=False)
+
+    while True:
+        print(f"\n{COLOR['menu_option']}1.  Test Connection{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}2.  List Databases{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}3.  List Collections{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}4.  Collection Stats{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}5.  Run JS Command{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}6.  Count Documents{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}7.  Server Status{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}b.  Back{COLOR['reset']}")
+        ch = input(f"{COLOR['prompt']}{EMOJI['input']} Enter choice: {COLOR['reset']}").strip().lower()
+        if ch == '1':
+            r = mongo_exec("db.adminCommand({ping:1})")
+            if r and "ok" in r.lower():
+                print_message(f"MongoDB at {host}:{port} is reachable.", "success")
+            else:
+                print_message("MongoDB connection failed.", "error")
+            if r: print(COLOR['output'] + r + COLOR['reset'])
+        elif ch == '2':
+            r = mongo_exec("db.adminCommand({listDatabases:1}).databases.forEach(d=>print(d.name,(d.sizeOnDisk/1024/1024).toFixed(2)+'MB'))")
+            if r: print(COLOR['output'] + r + COLOR['reset'])
+        elif ch == '3':
+            db = input(f"{COLOR['prompt']}{EMOJI['input']} Database name: {COLOR['reset']}").strip()
+            if db:
+                r = mongo_exec("db.getCollectionNames().forEach(c=>print(c))", db=db)
+                if r: print(COLOR['output'] + r + COLOR['reset'])
+        elif ch == '4':
+            db = input(f"{COLOR['prompt']}{EMOJI['input']} Database name: {COLOR['reset']}").strip()
+            col = input(f"{COLOR['prompt']}{EMOJI['input']} Collection name: {COLOR['reset']}").strip()
+            if db and col:
+                r = mongo_exec(f"printjson(db.{col}.stats())", db=db)
+                if r: print(COLOR['output'] + r[:3000] + COLOR['reset'])
+        elif ch == '5':
+            db = input(f"{COLOR['prompt']}{EMOJI['input']} Database (default: admin): {COLOR['reset']}").strip() or "admin"
+            js = input(f"{COLOR['prompt']}{EMOJI['input']} JS command: {COLOR['reset']}").strip()
+            if js:
+                r = mongo_exec(js, db=db)
+                if r is not None: print(COLOR['output'] + r[:3000] + COLOR['reset'])
+        elif ch == '6':
+            db = input(f"{COLOR['prompt']}{EMOJI['input']} Database name: {COLOR['reset']}").strip()
+            col = input(f"{COLOR['prompt']}{EMOJI['input']} Collection name: {COLOR['reset']}").strip()
+            if db and col:
+                r = mongo_exec(f"print(db.{col}.countDocuments())", db=db)
+                if r: print_message(f"Document count: {r.strip()}", "info")
+        elif ch == '7':
+            r = mongo_exec("printjson(db.serverStatus())", db="admin")
+            if r: print(COLOR['output'] + r[:3000] + COLOR['reset'])
+        elif ch == 'b':
+            break
+        else:
+            print_message("Invalid choice.", "warning")
+
+
+def _sqlserver_tools():
+    if not run_command("which sqlcmd" if platform.system() != "Windows" else "where sqlcmd", check=False):
+        print_message("sqlcmd not found. Install SQL Server command-line tools.", "error")
+        return
+    print_header("🗄️ SQL Server Management")
+    host = input(f"{COLOR['prompt']}{EMOJI['input']} Server (default: localhost): {COLOR['reset']}").strip() or "localhost"
+    port = input(f"{COLOR['prompt']}{EMOJI['input']} Port (default: 1433): {COLOR['reset']}").strip() or "1433"
+    user = input(f"{COLOR['prompt']}{EMOJI['input']} User (leave blank for Windows auth): {COLOR['reset']}").strip()
+    password = getpass.getpass("Password: ") if user else ""
+
+    def sqlcmd_exec(query, db="master"):
+        auth = f"-U {user} -P '{password}'" if user else "-E"
+        cmd = f'sqlcmd -S {host},{port} {auth} -d {db} -Q "{query}" -s "|" -W'
+        return run_command(cmd, check=False)
+
+    while True:
+        print(f"\n{COLOR['menu_option']}1.  Test Connection{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}2.  List Databases{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}3.  List Tables{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}4.  Run Custom Query{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}5.  Server Version{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}6.  Active Connections{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}b.  Back{COLOR['reset']}")
+        ch = input(f"{COLOR['prompt']}{EMOJI['input']} Enter choice: {COLOR['reset']}").strip().lower()
+        if ch == '1':
+            r = sqlcmd_exec("SELECT @@VERSION AS version, GETDATE() AS current_time, SYSTEM_USER AS current_user")
+            if r is not None:
+                print(COLOR['output'] + r + COLOR['reset'])
+                print_message("Connection successful.", "success")
+        elif ch == '2':
+            r = sqlcmd_exec("SELECT name, state_desc, recovery_model_desc FROM sys.databases ORDER BY name")
+            if r: print(COLOR['output'] + r + COLOR['reset'])
+        elif ch == '3':
+            db = input(f"{COLOR['prompt']}{EMOJI['input']} Database name: {COLOR['reset']}").strip() or "master"
+            r = sqlcmd_exec("SELECT TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE FROM INFORMATION_SCHEMA.TABLES ORDER BY TABLE_SCHEMA, TABLE_NAME", db=db)
+            if r: print(COLOR['output'] + r + COLOR['reset'])
+        elif ch == '4':
+            db = input(f"{COLOR['prompt']}{EMOJI['input']} Database (default: master): {COLOR['reset']}").strip() or "master"
+            query = input(f"{COLOR['prompt']}{EMOJI['input']} SQL query: {COLOR['reset']}").strip()
+            if query:
+                r = sqlcmd_exec(query, db=db)
+                if r is not None: print(COLOR['output'] + (r or "(no output)") + COLOR['reset'])
+        elif ch == '5':
+            r = sqlcmd_exec("SELECT @@VERSION")
+            if r: print(COLOR['output'] + r + COLOR['reset'])
+        elif ch == '6':
+            r = sqlcmd_exec("SELECT session_id, login_name, host_name, status, LEFT(text,80) AS query FROM sys.dm_exec_sessions CROSS APPLY sys.dm_exec_input_buffer(session_id,0) WHERE is_user_process=1")
+            if r: print(COLOR['output'] + r + COLOR['reset'])
+        elif ch == 'b':
+            break
+        else:
+            print_message("Invalid choice.", "warning")
+
+
+def database_utilities():
+    """Comprehensive database management — MySQL, PostgreSQL, Redis, MongoDB, SQL Server."""
+    print_header(f"{EMOJI['database']} Database Utilities")
+
+    while True:
+        print(f"\n{COLOR['menu_option']}1. 🐬 MySQL / MariaDB{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}2. 🐘 PostgreSQL{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}3. 🔴 Redis{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}4. 🍃 MongoDB{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}5. 🗄️  SQL Server (sqlcmd){COLOR['reset']}")
         print(f"{COLOR['menu_option']}b. Back to Main Menu{COLOR['reset']}")
 
         choice = input(f"{COLOR['prompt']}{EMOJI['input']} Enter your choice: {COLOR['reset']}").strip().lower()
 
         if choice == '1':
-            mysql_path = run_command("which mysql" if platform.system() != "Windows" else "where mysql", check=False)
-            if mysql_path:
-                print_message(f"{EMOJI['success']} MySQL client found at: {mysql_path}", "success")
-            else:
-                print_message(f"{EMOJI['error']} MySQL client not found. Please install it.", "error")
+            _mysql_tools()
         elif choice == '2':
-            psql_path = run_command("which psql" if platform.system() != "Windows" else "where psql", check=False)
-            if psql_path:
-                print_message(f"{EMOJI['success']} PostgreSQL client (psql) found at: {psql_path}", "success")
-            else:
-                print_message(f"{EMOJI['error']} PostgreSQL client (psql) not found. Please install it.", "error")
+            _postgres_tools()
         elif choice == '3':
-            sqlcmd_path = run_command("which sqlcmd" if platform.system() != "Windows" else "where sqlcmd", check=False)
-            if sqlcmd_path:
-                print_message(f"{EMOJI['success']} SQL Server client (sqlcmd) found at: {sqlcmd_path}", "success")
-            else:
-                print_message(f"{EMOJI['error']} SQL Server client (sqlcmd) not found. Please install it.", "error")
+            _redis_tools()
         elif choice == '4':
-            mysql_path = run_command("which mysql" if platform.system() != "Windows" else "where mysql", check=False)
-            if not mysql_path:
-                print_message(f"{EMOJI['error']} MySQL client not found.", "error")
-                continue
-            host = input(f"{COLOR['prompt']}{EMOJI['input']} Enter MySQL host (default: 127.0.0.1): {COLOR['reset']}").strip() or "127.0.0.1"
-            port = input(f"{COLOR['prompt']}{EMOJI['input']} Enter MySQL port (default: 3306): {COLOR['reset']}").strip() or "3306"
-            user = input(f"{COLOR['prompt']}{EMOJI['input']} Enter MySQL user: {COLOR['reset']}").strip()
-            query = input(f"{COLOR['prompt']}{EMOJI['input']} Enter SQL query: {COLOR['reset']}").strip()
-            if user and query:
-                mysql_cmd = f"mysql -h {host} -P {port} -u {user} -p -e \"{query}\""
-                print_message(f"{EMOJI['info']} You will be prompted for the password.", "info")
-                run_command(mysql_cmd, capture_output=False, check=False)
-            else:
-                print_message(f"{EMOJI['warning']} User and query cannot be empty.", "warning")
+            _mongodb_tools()
         elif choice == '5':
-            psql_path = run_command("which psql" if platform.system() != "Windows" else "where psql", check=False)
-            if not psql_path:
-                print_message(f"{EMOJI['error']} PostgreSQL client not found.", "error")
-                continue
-            host = input(f"{COLOR['prompt']}{EMOJI['input']} Enter PostgreSQL host (default: 127.0.0.1): {COLOR['reset']}").strip() or "127.0.0.1"
-            port = input(f"{COLOR['prompt']}{EMOJI['input']} Enter PostgreSQL port (default: 5432): {COLOR['reset']}").strip() or "5432"
-            user = input(f"{COLOR['prompt']}{EMOJI['input']} Enter PostgreSQL user: {COLOR['reset']}").strip()
-            dbname = input(f"{COLOR['prompt']}{EMOJI['input']} Enter database name: {COLOR['reset']}").strip()
-            query = input(f"{COLOR['prompt']}{EMOJI['input']} Enter SQL query: {COLOR['reset']}").strip()
-            if user and dbname and query:
-                psql_cmd = f"psql -h {host} -p {port} -U {user} -d {dbname} -c \"{query}\""
-                run_command(psql_cmd, capture_output=False, check=False)
-            else:
-                print_message(f"{EMOJI['warning']} User, database name, and query cannot be empty.", "warning")
-        elif choice == '6':
-            redis_path = run_command("which redis-cli" if platform.system() != "Windows" else "where redis-cli", check=False)
-            if redis_path:
-                print_message(f"{EMOJI['success']} Redis CLI found at: {redis_path}", "success")
-                ping_result = run_command("redis-cli ping", check=False)
-                if ping_result and "PONG" in ping_result:
-                    print_message(f"{EMOJI['success']} Redis is running and responding (PONG).", "success")
-                else:
-                    print_message(f"{EMOJI['warning']} Redis CLI found but server not responding. Is Redis running?", "warning")
-            else:
-                print_message(f"{EMOJI['error']} Redis CLI not found. Please install it.", "error")
+            _sqlserver_tools()
         elif choice == 'b':
             break
         else:
@@ -2678,6 +3114,374 @@ def terraform_utilities():
         else:
             print_message(f"{EMOJI['warning']} Invalid choice. Please try again.", "warning")
 
+def network_troubleshooting():
+    """Comprehensive network troubleshooting suite."""
+    print_header("🔍 Network Troubleshooting Suite")
+
+    while True:
+        print(f"\n{COLOR['menu_option']}1.  Full DNS Diagnosis{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}2.  Ping Analysis (packet loss & RTT){COLOR['reset']}")
+        print(f"{COLOR['menu_option']}3.  Traceroute / MTR Path Analysis{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}4.  TCP Connection Test with Timing{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}5.  HTTP Performance Test (curl timings){COLOR['reset']}")
+        print(f"{COLOR['menu_option']}6.  SSL/TLS Full Chain Validation{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}7.  Network Interface Diagnostics{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}8.  Socket Statistics (ss){COLOR['reset']}")
+        print(f"{COLOR['menu_option']}9.  DNS Propagation Check (multiple resolvers){COLOR['reset']}")
+        print(f"{COLOR['menu_option']}10. Subnet Calculator{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}11. Ping Sweep / Host Discovery{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}12. NTP / Time Sync Status{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}13. Packet Capture (tcpdump){COLOR['reset']}")
+        print(f"{COLOR['menu_option']}14. Bandwidth Speed Test{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}15. Full Network Health Check{COLOR['reset']}")
+        print(f"{COLOR['menu_option']}b.  Back to Main Menu{COLOR['reset']}")
+
+        choice = input(f"{COLOR['prompt']}{EMOJI['input']} Enter your choice: {COLOR['reset']}").strip().lower()
+
+        if choice == '1':
+            domain = input(f"{COLOR['prompt']}{EMOJI['input']} Domain to diagnose (e.g., example.com): {COLOR['reset']}").strip()
+            if domain:
+                print_header(f"DNS Diagnosis: {domain}")
+                for rtype in ['A', 'AAAA', 'MX', 'NS', 'TXT', 'CNAME', 'SOA']:
+                    print_message(f"\n{rtype} Records:", "info")
+                    if platform.system() in ["Linux", "Darwin"]:
+                        r = run_command(f"dig {domain} {rtype} +short +time=3", check=False)
+                    else:
+                        r = run_command(f"nslookup -type={rtype} {domain}", check=False)
+                    print(COLOR['output'] + (r if r else f"  (no {rtype} records)") + COLOR['reset'])
+                if platform.system() in ["Linux", "Darwin"]:
+                    print_message(f"\nConfigured resolvers:", "info")
+                    resolvers = run_command("grep nameserver /etc/resolv.conf 2>/dev/null", check=False)
+                    print(COLOR['output'] + (resolvers or "N/A") + COLOR['reset'])
+                    a_ip = run_command(f"dig {domain} A +short | head -1", check=False)
+                    if a_ip and a_ip.strip():
+                        print_message(f"\nReverse DNS for {a_ip.strip()}:", "info")
+                        ptr = run_command(f"dig -x {a_ip.strip()} +short", check=False)
+                        print(COLOR['output'] + (ptr or "(no PTR record)") + COLOR['reset'])
+                print_message("DNS diagnosis completed.", "success")
+            else:
+                print_message("Domain cannot be empty.", "warning")
+
+        elif choice == '2':
+            host = input(f"{COLOR['prompt']}{EMOJI['input']} Host to ping: {COLOR['reset']}").strip()
+            count = input(f"{COLOR['prompt']}{EMOJI['input']} Packet count (default: 10): {COLOR['reset']}").strip() or "10"
+            if host and count.isdigit():
+                cmd = f"ping -c {count} -i 0.2 {host}" if platform.system() != "Windows" else f"ping -n {count} {host}"
+                result = run_command(cmd)
+                if result:
+                    print(COLOR['output'] + result + COLOR['reset'])
+                    print_message("Summary:", "info")
+                    for line in result.splitlines():
+                        if any(k in line for k in ["packet loss", "rtt", "round-trip", "min/avg", "Minimum"]):
+                            print(f"  {COLOR['output']}{line}{COLOR['reset']}")
+                else:
+                    print_message("Ping failed or host unreachable.", "error")
+            else:
+                print_message("Host and valid count are required.", "warning")
+
+        elif choice == '3':
+            host = input(f"{COLOR['prompt']}{EMOJI['input']} Host for path analysis: {COLOR['reset']}").strip()
+            if host:
+                if run_command("which mtr", check=False):
+                    cmd = f"mtr --report --report-cycles 5 --no-dns {host}"
+                    print_message("Running MTR (5 cycles)...", "info")
+                elif platform.system() != "Windows":
+                    cmd = f"traceroute -n {host}"
+                else:
+                    cmd = f"tracert {host}"
+                result = run_command(cmd)
+                print(COLOR['output'] + (result or "Traceroute failed or host unreachable.") + COLOR['reset'])
+            else:
+                print_message("Host cannot be empty.", "warning")
+
+        elif choice == '4':
+            host = input(f"{COLOR['prompt']}{EMOJI['input']} Host: {COLOR['reset']}").strip()
+            port = input(f"{COLOR['prompt']}{EMOJI['input']} Port: {COLOR['reset']}").strip()
+            if host and port.isdigit():
+                print_message(f"Connecting to {host}:{port}...", "info")
+                t0 = _time.time()
+                if platform.system() != "Windows":
+                    result = run_command(f"nc -vz -w 5 {host} {port}")
+                else:
+                    result = run_command(f"powershell -command \"$t=New-Object Net.Sockets.TcpClient;$r=$t.BeginConnect('{host}',{port},$null,$null);$ok=$r.AsyncWaitHandle.WaitOne(5000);if($ok -and $t.Connected){{Write-Host 'Connected'}}else{{Write-Host 'Failed'}};$t.Close()\"")
+                elapsed = (_time.time() - t0) * 1000
+                if result is not None:
+                    print_message(f"Connected to {host}:{port} in {elapsed:.1f} ms", "success")
+                    if result: print(COLOR['output'] + result + COLOR['reset'])
+                else:
+                    print_message(f"Connection to {host}:{port} FAILED after {elapsed:.1f} ms", "error")
+            else:
+                print_message("Host and numeric port required.", "warning")
+
+        elif choice == '5':
+            url = input(f"{COLOR['prompt']}{EMOJI['input']} URL (e.g., https://example.com): {COLOR['reset']}").strip()
+            if url:
+                print_message(f"Testing HTTP performance for {url}...", "info")
+                fmt = '{"dns":"%{time_namelookup}","tcp":"%{time_connect}","tls":"%{time_appconnect}","ttfb":"%{time_starttransfer}","total":"%{time_total}","size":"%{size_download}","http":"%{http_code}"}'
+                result = run_command(f"curl -s -o /dev/null -L -w '{fmt}' --max-time 15 {url}")
+                if result:
+                    try:
+                        d = json.loads(result)
+                        print_message(f"HTTP Status:         {d['http']}", "info")
+                        print_message(f"DNS Lookup:          {float(d['dns'])*1000:.1f} ms", "info")
+                        print_message(f"TCP Connect:         {float(d['tcp'])*1000:.1f} ms", "info")
+                        tls_ms = float(d['tls']) * 1000
+                        if tls_ms > 0:
+                            print_message(f"TLS Handshake:       {tls_ms:.1f} ms", "info")
+                        print_message(f"Time to First Byte:  {float(d['ttfb'])*1000:.1f} ms", "info")
+                        print_message(f"Total Time:          {float(d['total'])*1000:.1f} ms", "info")
+                        print_message(f"Download Size:       {int(float(d['size']))/1024:.1f} KB", "info")
+                        print_message("HTTP performance test completed.", "success")
+                    except Exception:
+                        print(COLOR['output'] + result + COLOR['reset'])
+                else:
+                    print_message("HTTP test failed. Is curl installed?", "error")
+            else:
+                print_message("URL cannot be empty.", "warning")
+
+        elif choice == '6':
+            host_port = input(f"{COLOR['prompt']}{EMOJI['input']} Host:port (e.g., example.com:443): {COLOR['reset']}").strip()
+            if host_port:
+                if ':' not in host_port:
+                    host_port += ':443'
+                host_only = host_port.rsplit(':', 1)[0]
+                print_header(f"SSL/TLS Analysis: {host_port}")
+                print_message("Certificate subject/issuer/dates:", "info")
+                r = run_command(f"echo | openssl s_client -connect {host_port} -servername {host_only} 2>/dev/null | openssl x509 -noout -subject -issuer -dates 2>/dev/null", check=False)
+                print(COLOR['output'] + (r or "Failed to retrieve certificate.") + COLOR['reset'])
+                print_message("\nProtocol & cipher:", "info")
+                r2 = run_command(f"echo | openssl s_client -connect {host_port} -servername {host_only} 2>/dev/null | grep -E 'Protocol|Cipher'", check=False)
+                print(COLOR['output'] + (r2 or "N/A") + COLOR['reset'])
+                print_message("\nTLS version support:", "info")
+                for ver, label in [("tls1", "TLS 1.0"), ("tls1_1", "TLS 1.1"), ("tls1_2", "TLS 1.2"), ("tls1_3", "TLS 1.3")]:
+                    test = run_command(f"echo | openssl s_client -{ver} -connect {host_port} -servername {host_only} 2>&1 | grep -c CONNECTED", check=False)
+                    if test and test.strip() == "1":
+                        print_message(f"  {label}: Supported", "success")
+                    else:
+                        print_message(f"  {label}: Not supported", "warning")
+                print_message("SSL/TLS analysis completed.", "success")
+            else:
+                print_message("Host:port cannot be empty.", "warning")
+
+        elif choice == '7':
+            print_header("Network Interface Diagnostics")
+            if platform.system() in ["Linux", "Darwin"]:
+                if run_command("which ip", check=False):
+                    print_message("Interfaces with TX/RX stats:", "info")
+                    print(COLOR['output'] + (run_command("ip -s link") or "N/A") + COLOR['reset'])
+                    print_message("\nIP addresses:", "info")
+                    print(COLOR['output'] + (run_command("ip addr show") or "N/A") + COLOR['reset'])
+                else:
+                    print(COLOR['output'] + (run_command("ifconfig -a") or "N/A") + COLOR['reset'])
+            elif platform.system() == "Windows":
+                r = run_command("powershell -command \"Get-NetAdapter | Select-Object Name,Status,MacAddress,LinkSpeed | Format-Table -AutoSize\"")
+                print(COLOR['output'] + (r or "N/A") + COLOR['reset'])
+            print_message("Interface diagnostics completed.", "success")
+
+        elif choice == '8':
+            print_header("Socket Statistics")
+            if platform.system() in ["Linux", "Darwin"]:
+                if run_command("which ss", check=False):
+                    print_message("Listening sockets:", "info")
+                    print(COLOR['output'] + (run_command("ss -tulnp") or "N/A") + COLOR['reset'])
+                    print_message("\nEstablished connections:", "info")
+                    print(COLOR['output'] + (run_command("ss -tnp state established") or "(none)") + COLOR['reset'])
+                    print_message("\nConnection summary by state:", "info")
+                    print(COLOR['output'] + (run_command("ss -s") or "N/A") + COLOR['reset'])
+                else:
+                    print(COLOR['output'] + (run_command("netstat -tulnp") or "N/A") + COLOR['reset'])
+            elif platform.system() == "Windows":
+                print(COLOR['output'] + (run_command("netstat -ano") or "N/A") + COLOR['reset'])
+            print_message("Socket statistics completed.", "success")
+
+        elif choice == '9':
+            domain = input(f"{COLOR['prompt']}{EMOJI['input']} Domain to check propagation for: {COLOR['reset']}").strip()
+            if domain:
+                print_header(f"DNS Propagation: {domain}")
+                servers = {
+                    "Google (8.8.8.8)":       "8.8.8.8",
+                    "Cloudflare (1.1.1.1)":   "1.1.1.1",
+                    "OpenDNS (208.67.222.222)":"208.67.222.222",
+                    "Quad9 (9.9.9.9)":        "9.9.9.9",
+                    "Comodo (8.26.56.26)":    "8.26.56.26",
+                    "Local resolver":          "",
+                }
+                print(f"\n  {'Resolver':<32} {'A Record(s)'}")
+                print(f"  {'-'*60}")
+                for name, server in servers.items():
+                    if platform.system() in ["Linux", "Darwin"]:
+                        cmd = (f"dig @{server} {domain} A +short +time=3" if server else f"dig {domain} A +short")
+                    else:
+                        cmd = (f"nslookup {domain} {server}" if server else f"nslookup {domain}")
+                    result = run_command(cmd, check=False)
+                    answer = result.strip().replace('\n', ', ') if result and result.strip() else "No response"
+                    color = COLOR['success'] if result and result.strip() else COLOR['warning']
+                    print(f"  {color}{name:<32} {answer}{COLOR['reset']}")
+                print_message("DNS propagation check completed.", "success")
+            else:
+                print_message("Domain cannot be empty.", "warning")
+
+        elif choice == '10':
+            cidr = input(f"{COLOR['prompt']}{EMOJI['input']} CIDR notation (e.g., 192.168.1.0/24): {COLOR['reset']}").strip()
+            if cidr and '/' in cidr:
+                try:
+                    net = ipaddress.IPv4Network(cidr, strict=False)
+                    hosts = list(net.hosts())
+                    print_header(f"Subnet: {cidr}")
+                    print(f"  Network Address:    {net.network_address}")
+                    print(f"  Broadcast Address:  {net.broadcast_address}")
+                    print(f"  Subnet Mask:        {net.netmask}")
+                    print(f"  Wildcard Mask:      {net.hostmask}")
+                    print(f"  Prefix Length:      /{net.prefixlen}")
+                    print(f"  Total Addresses:    {net.num_addresses}")
+                    print(f"  Usable Hosts:       {len(hosts)}")
+                    print(f"  First Host:         {hosts[0] if hosts else 'N/A'}")
+                    print(f"  Last Host:          {hosts[-1] if hosts else 'N/A'}")
+                    print(f"  Is Private:         {net.is_private}")
+                    print(f"  Is Global:          {net.is_global}")
+                    print_message("Subnet calculation completed.", "success")
+                except ValueError as e:
+                    print_message(f"Invalid CIDR: {e}", "error")
+            else:
+                print_message("Please enter valid CIDR notation (e.g., 10.0.0.0/8).", "warning")
+
+        elif choice == '11':
+            subnet = input(f"{COLOR['prompt']}{EMOJI['input']} Subnet prefix (e.g., 192.168.1): {COLOR['reset']}").strip()
+            start = input(f"{COLOR['prompt']}{EMOJI['input']} Start host (1-254, default: 1): {COLOR['reset']}").strip() or "1"
+            end = input(f"{COLOR['prompt']}{EMOJI['input']} End host (1-254, default: 20): {COLOR['reset']}").strip() or "20"
+            if subnet and start.isdigit() and end.isdigit():
+                s, e = int(start), int(end)
+                if not (1 <= s <= 254 and 1 <= e <= 254 and s <= e):
+                    print_message("Invalid range. Values must be 1-254.", "warning")
+                    continue
+                print_message(f"Scanning {subnet}.{s}-{e}... (this may take a moment)", "info")
+                live = []
+                for i in range(s, e + 1):
+                    ip = f"{subnet}.{i}"
+                    if platform.system() != "Windows":
+                        r = run_command(f"ping -c 1 -W 1 {ip}", check=False)
+                        alive = r is not None and ("1 received" in r or "bytes from" in r)
+                    else:
+                        r = run_command(f"ping -n 1 -w 500 {ip}", check=False)
+                        alive = r is not None and "TTL=" in r
+                    if alive:
+                        live.append(ip)
+                        print_message(f"  ALIVE: {ip}", "success")
+                print_message(f"Scan complete. Found {len(live)} live host(s).", "success" if live else "warning")
+            else:
+                print_message("Subnet prefix and valid range required.", "warning")
+
+        elif choice == '12':
+            print_header("NTP / Time Synchronization")
+            if platform.system() in ["Linux", "Darwin"]:
+                td = run_command("timedatectl 2>/dev/null", check=False)
+                if td:
+                    print_message("timedatectl output:", "info")
+                    print(COLOR['output'] + td + COLOR['reset'])
+                ntpq = run_command("ntpq -p 2>/dev/null", check=False)
+                if ntpq:
+                    print_message("\nNTP peers:", "info")
+                    print(COLOR['output'] + ntpq + COLOR['reset'])
+                chrony = run_command("chronyc tracking 2>/dev/null", check=False)
+                if chrony:
+                    print_message("\nChrony tracking:", "info")
+                    print(COLOR['output'] + chrony + COLOR['reset'])
+                if not td and not ntpq and not chrony:
+                    print_message("No NTP tool found (timedatectl/ntpq/chronyc).", "warning")
+            elif platform.system() == "Windows":
+                r = run_command("w32tm /query /status")
+                print(COLOR['output'] + (r or "N/A") + COLOR['reset'])
+            print_message("Time sync check completed.", "success")
+
+        elif choice == '13':
+            if platform.system() not in ["Linux", "Darwin"]:
+                print_message("tcpdump is available on Linux/macOS only.", "warning")
+                continue
+            if not run_command("which tcpdump", check=False):
+                print_message("tcpdump not found. Install: sudo apt install tcpdump", "error")
+                continue
+            iface = input(f"{COLOR['prompt']}{EMOJI['input']} Interface (e.g., eth0, any — default: any): {COLOR['reset']}").strip() or "any"
+            filt = input(f"{COLOR['prompt']}{EMOJI['input']} BPF filter (e.g., 'port 80', leave blank for all): {COLOR['reset']}").strip()
+            count = input(f"{COLOR['prompt']}{EMOJI['input']} Packet count (default: 20): {COLOR['reset']}").strip() or "20"
+            cmd = f"sudo tcpdump -i {iface} -c {count} -nn -q {filt}"
+            print_message(f"Capturing on {iface}. Press Ctrl+C to stop early.", "info")
+            run_command(cmd, capture_output=False, check=False)
+            print_message("Capture completed.", "success")
+
+        elif choice == '14':
+            print_message("Testing bandwidth...", "info")
+            if run_command("which speedtest-cli", check=False):
+                result = run_command("speedtest-cli --simple")
+            elif run_command("which speedtest", check=False):
+                result = run_command("speedtest")
+            else:
+                print_message("speedtest-cli not found. Using curl fallback (10 MB from Cloudflare)...", "info")
+                result = run_command("curl -s -o /dev/null -w 'Speed: %{speed_download} bytes/sec\\nTime: %{time_total}s\\n' --max-time 30 https://speed.cloudflare.com/__down?bytes=10000000")
+                if result:
+                    for line in result.splitlines():
+                        if "bytes/sec" in line:
+                            try:
+                                bps = float(line.split(':')[1].strip().split()[0])
+                                print_message(f"Download: {bps*8/1e6:.2f} Mbps ({bps/1024:.0f} KB/s)", "success")
+                            except Exception:
+                                pass
+            if result:
+                print(COLOR['output'] + result + COLOR['reset'])
+            else:
+                print_message("Speed test failed.", "error")
+
+        elif choice == '15':
+            print_header("Full Network Health Check")
+            checks = []
+
+            if platform.system() in ["Linux", "Darwin"]:
+                gw = run_command("ip route show default 2>/dev/null | awk '/default/{print $3}' | head -1", check=False)
+                if gw and gw.strip():
+                    gw_ping = run_command(f"ping -c 2 -W 2 {gw.strip()}", check=False)
+                    ok = gw_ping is not None and "2 received" in gw_ping
+                    checks.append(("Default Gateway Ping", gw.strip(), ok))
+
+            if platform.system() != "Windows":
+                dns_r = run_command("dig google.com A +short +time=3 2>/dev/null | head -1", check=False)
+            else:
+                dns_r = run_command("nslookup google.com", check=False)
+            checks.append(("DNS Resolution", "google.com", bool(dns_r and dns_r.strip())))
+
+            if platform.system() != "Windows":
+                inet_ping = run_command("ping -c 2 -W 3 8.8.8.8 2>/dev/null", check=False)
+                inet_ok = inet_ping is not None and "2 received" in inet_ping
+            else:
+                inet_ping = run_command("ping -n 2 -w 3000 8.8.8.8", check=False)
+                inet_ok = inet_ping is not None and "TTL=" in inet_ping
+            checks.append(("Internet ICMP (8.8.8.8)", "8.8.8.8", inet_ok))
+
+            http_r = run_command("curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 10 https://google.com", check=False)
+            checks.append(("HTTPS Connectivity", "https://google.com", http_r is not None and http_r.strip() in ['200', '301', '302']))
+
+            if platform.system() in ["Linux", "Darwin"]:
+                iface_up = run_command("ip link show 2>/dev/null | grep -c 'state UP'", check=False)
+                checks.append(("Network Interfaces UP", f"{iface_up or 0} interface(s)", bool(iface_up and int(iface_up) > 0)))
+
+            print(f"\n  {'Check':<30} {'Target':<26} {'Status'}")
+            print(f"  {'-'*62}")
+            all_ok = True
+            for name, target, ok in checks:
+                status_str = f"{COLOR['success']}PASS{COLOR['reset']}" if ok else f"{COLOR['error']}FAIL{COLOR['reset']}"
+                print(f"  {name:<30} {target:<26} {status_str}")
+                if not ok:
+                    all_ok = False
+            print()
+            if all_ok:
+                print_message("All network health checks passed.", "success")
+            else:
+                print_message("One or more checks failed. Review the results above.", "warning")
+
+        elif choice == 'b':
+            break
+        else:
+            print_message(f"{EMOJI['warning']} Invalid choice. Please try again.", "warning")
+
+
 # --- Main Application Logic ---
 
 def display_main_menu():
@@ -2704,8 +3508,9 @@ def display_main_menu():
     print(f"{COLOR['menu_option']}19. {EMOJI['database']} Database Utilities{COLOR['reset']}") # New Category
     print(f"{COLOR['menu_option']}20. {EMOJI['virtualization']} Virtualization Utilities (Local){COLOR['reset']}")
     print(f"{COLOR['menu_option']}21. 🏗️ Terraform Utilities{COLOR['reset']}")
-    print(f"{COLOR['menu_option']}22. {EMOJI['windows']} Windows Specific Tools{COLOR['reset']}")
-    print(f"{COLOR['menu_option']}23. {EMOJI['exit']} Exit{COLOR['reset']}")
+    print(f"{COLOR['menu_option']}22. 🔍 Network Troubleshooting Suite{COLOR['reset']}")
+    print(f"{COLOR['menu_option']}23. {EMOJI['windows']} Windows Specific Tools{COLOR['reset']}")
+    print(f"{COLOR['menu_option']}24. {EMOJI['exit']} Exit{COLOR['reset']}")
     print(f"{COLOR['header']}{EMOJI['separator'] * 3}{COLOR['reset']}")
 
 def main():
@@ -2760,15 +3565,17 @@ def main():
         elif choice == '21':
             terraform_utilities()
         elif choice == '22':
-            windows_specific_tools()
+            network_troubleshooting()
         elif choice == '23':
+            windows_specific_tools()
+        elif choice == '24':
             print_message(f"{EMOJI['exit']} Exiting {APP_NAME}. Goodbye! {EMOJI['exit']}", "info")
             break
         else:
             print_message(f"{EMOJI['warning']} Invalid choice. Please select a valid option from the menu.", "warning")
 
         # Pause before showing menu again, unless exiting
-        if choice != '23':
+        if choice != '24':
             input(f"{COLOR['prompt']}{EMOJI['input']} Press Enter to continue...{COLOR['reset']}")
             os.system('cls' if os.name == 'nt' else 'clear') # Clear screen for better readability
 
